@@ -60,7 +60,10 @@ export function SettingsPage({ user }) {
       <section className="page-card row">
         <h2 className="section-title">Username</h2>
         <form className="row" onSubmit={handleSaveUsername}>
-          <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" />
+          <div className="form-group">
+            <label>Username</label>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter your username" />
+          </div>
           <button type="submit" disabled={busy}>
             Save Username
           </button>
@@ -69,18 +72,24 @@ export function SettingsPage({ user }) {
       <section className="page-card row">
         <h2 className="section-title">Password &amp; Security</h2>
         <form className="row" onSubmit={handleChangePassword}>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter new password"
-          />
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirm new password"
-          />
+          <div className="form-group">
+            <label>New Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter new password"
+            />
+          </div>
+          <div className="form-group">
+            <label>Confirm Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+            />
+          </div>
           <button type="submit" disabled={busy}>
             Change Password
           </button>

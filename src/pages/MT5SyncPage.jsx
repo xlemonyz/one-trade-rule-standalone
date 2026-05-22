@@ -81,38 +81,38 @@ export function MT5SyncPage({ connection, onSaveConnection, onRefresh, syncing }
 
       <section className="page-card">
         <form className="row" onSubmit={handleSave}>
-          <label className="row">
-            <span>Broker / Server</span>
+          <div className="form-group">
+            <label>Broker / Server</label>
             <input
               value={form.broker_name}
               onChange={(e) => setForm((prev) => ({ ...prev, broker_name: e.target.value }))}
               placeholder="e.g. FTMO Global Markets"
             />
-          </label>
-          <label className="row">
-            <span>MT5 Account Number</span>
+          </div>
+          <div className="form-group">
+            <label>MT5 Account Number</label>
             <input
               value={form.account_number}
               onChange={(e) => setForm((prev) => ({ ...prev, account_number: e.target.value }))}
               placeholder="e.g. 12345678"
             />
-          </label>
-          <label className="row">
-            <span>API Key</span>
+          </div>
+          <div className="form-group">
+            <label>API Key</label>
             <input
               value={form.api_key}
               onChange={(e) => setForm((prev) => ({ ...prev, api_key: e.target.value }))}
               placeholder="mt5_xxxx..."
             />
-          </label>
-          <label className="row">
-            <span>Importer Endpoint (optional)</span>
+          </div>
+          <div className="form-group">
+            <label>Importer Endpoint (optional)</label>
             <input
               value={form.endpoint_url}
               onChange={(e) => setForm((prev) => ({ ...prev, endpoint_url: e.target.value }))}
               placeholder="https://<project>.functions.supabase.co/mt5-import"
             />
-          </label>
+          </div>
           <div className="meta">Masked key preview: {masked || "--"}</div>
           <div style={{ display: "flex", gap: 10 }}>
             <button
