@@ -1,5 +1,7 @@
 :root {
-  font-family: Inter, "Segoe UI", Tahoma, sans-serif;
+  --font-serif: "Crimson Text", serif;
+  --font-sans: Inter, "Segoe UI", Tahoma, sans-serif;
+  font-family: var(--font-sans);
   color: #1a1a1a;
   background: #fafafa;
 }
@@ -13,11 +15,10 @@ body {
   background: #fafafa;
 }
 
-button,
 input,
 textarea,
 select {
-  font: inherit;
+  font-family: var(--font-sans);
 }
 
 .app-shell {
@@ -115,33 +116,39 @@ select {
 }
 
 .stat .label {
-  color: #888;
-  font-size: 12px;
-  font-weight: 400;
+  color: #999;
+  font-size: 11px;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
 }
 
 .stat .value {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 700;
   margin-top: 8px;
   color: #1a1a1a;
-  line-height: 1.2;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-sans);
 }
 
 .section-title {
   margin: 0 0 6px;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   color: #1a1a1a;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
+  font-family: var(--font-serif);
 }
 
 .section-subtitle {
   margin: 0 0 12px;
   color: #888;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.8px;
 }
 
 .header-split {
@@ -161,19 +168,21 @@ select {
 }
 
 .discipline-countdown .label {
-  color: #888;
-  font-size: 12px;
+  color: #999;
+  font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .discipline-countdown .value {
-  font-size: 42px;
+  font-size: 48px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
   margin-top: 8px;
   color: #1a1a1a;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-sans);
 }
 
 .discipline-countdown .meta {
@@ -206,16 +215,24 @@ select {
 }
 
 .day-card > div:first-child {
-  font-weight: 600;
+  font-weight: 700;
   color: #1a1a1a;
   margin-bottom: 4px;
   font-size: 15px;
+  font-family: var(--font-sans);
 }
 
 .day-card > div:nth-child(2) {
-  font-size: 12px;
-  color: #888;
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
+.day-card .meta {
+  font-size: 11px;
+  color: #aaa;
   font-weight: 400;
+  margin-top: 4px;
 }
 
 .day-card.clean {
@@ -257,6 +274,7 @@ select {
   gap: 16px;
   transition: none;
   background: #fff;
+  align-items: flex-start;
 }
 
 .trade-card:hover {
@@ -278,13 +296,14 @@ select {
   font-weight: 600;
   display: block;
   margin-bottom: 4px;
-  font-size: 14px;
+  font-size: 15px;
+  font-family: var(--font-sans);
 }
 
 .trade-card .meta {
-  color: #999;
-  font-size: 11px;
-  margin-top: 3px;
+  color: #aaa;
+  font-size: 12px;
+  margin-top: 4px;
   line-height: 1.4;
   font-weight: 400;
 }
@@ -296,20 +315,21 @@ select {
 
 .badge {
   display: inline-block;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #ddd;
   border-radius: 4px;
-  padding: 4px 10px;
+  padding: 4px 9px;
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   color: #666;
-  background: #f5f5f5;
+  background: #f8f8f8;
   margin-right: 6px;
+  font-variant-numeric: tabular-nums;
 }
 
 .badge.red {
-  border-color: #e8b8b8;
-  color: #884444;
-  background: #f9eded;
+  border-color: #dcc5c5;
+  color: #7a4444;
+  background: #faf6f6;
 }
 
 .row {
@@ -339,15 +359,15 @@ select {
 }
 
 .notice.success {
-  border-color: #d4f4d4;
-  background: #f5faf5;
-  color: #336633;
+  border-color: #d8e8d8;
+  background: #f6faf6;
+  color: #4a6b4a;
 }
 
 .notice.error {
-  border-color: #f0d4d4;
-  background: #faf5f5;
-  color: #884444;
+  border-color: #e5d0d0;
+  background: #faf6f6;
+  color: #7a4444;
 }
 
 .secondary-btn,
@@ -369,14 +389,17 @@ button {
 }
 
 button:hover:not(:disabled) {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
+  background: #555;
+  border-color: #555;
   box-shadow: none;
+  color: #fff;
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
+  background: #666;
+  border-color: #666;
 }
 
 .secondary-btn {
@@ -385,8 +408,9 @@ button:disabled {
 }
 
 .secondary-btn:hover {
-  background: #f5f5f5;
-  border-color: #d0d0d0;
+  background: #f0f0f0;
+  border-color: #ccc;
+  color: #1a1a1a;
 }
 
 .auth-root {
@@ -418,10 +442,23 @@ button:disabled {
 }
 
 .auth-card input {
-  border: 1px solid #e5e5e5;
+  border: 1px solid #d8d8d8;
   border-radius: 6px;
-  padding: 10px 12px;
+  padding: 11px 14px;
   font-size: 13px;
+  line-height: 1.5;
+  height: 40px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-card input:focus {
+  outline: none;
+  border-color: #333;
+  box-shadow: 0 0 0 2px rgba(51, 51, 51, 0.1);
+}
+
+.auth-card input::placeholder {
+  color: #aaa;
 }
 
 .center-screen {
