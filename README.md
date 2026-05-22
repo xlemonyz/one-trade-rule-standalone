@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # One Trade Rule (Standalone)
 
 Standalone One Trade Rule app (fully separate from OneTrade OS).
@@ -106,3 +107,7 @@ https://<your-project-ref>.functions.supabase.co/mt5-import
 Detailed phased roadmap:
 
 - `docs/ROADMAP.md`
+=======
+# one-trade-rule-standalone
+standard one trade rule only
+>>>>>>> bfd07d66be0905104ed04fb75900d6c18bf36581
