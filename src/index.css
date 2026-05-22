@@ -1,0 +1,334 @@
+:root {
+  font-family: Inter, "Segoe UI", Tahoma, sans-serif;
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f1f5f9;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+}
+
+.sidebar {
+  border-right: 1px solid #d9e2ef;
+  background: #fff;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar h2 {
+  margin: 0;
+  color: #1d4ed8;
+}
+
+.nav-item {
+  display: block;
+  color: #334155;
+  text-decoration: none;
+  border: 1px solid transparent;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.nav-item.active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 10px;
+}
+
+.user-block {
+  border: 1px solid #dbe7f6;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.user-block small {
+  color: #64748b;
+}
+
+.content {
+  padding: 22px;
+}
+
+.page-card {
+  background: #fff;
+  border: 1px solid #dbe7f6;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.summary-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.stat {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.stat .label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.stat .value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.section-title {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.section-subtitle {
+  margin: 0 0 12px;
+  color: #64748b;
+}
+
+.header-split {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+
+.discipline-countdown {
+  border: 1px solid #bfdbfe;
+  background: #f8fbff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 220px;
+}
+
+.discipline-countdown .label {
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.discipline-countdown .value {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.discipline-countdown .meta {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.card-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.day-card {
+  border: 1px solid #dbe7f6;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.day-card.clean {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.day-card.broken {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.day-card.no-trade {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.trade-card {
+  border: 1px solid #dbe7f6;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trade-card .meta {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.trade-card.broken {
+  border-color: #fecaca;
+}
+
+.badge {
+  display: inline-block;
+  border: 1px solid #dbe7f6;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.badge.red {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.row {
+  display: grid;
+  gap: 8px;
+}
+
+.split {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.notices {
+  margin-bottom: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.notice {
+  border-radius: 10px;
+  border: 1px solid;
+  padding: 10px 12px;
+}
+
+.notice.success {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.notice.error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.secondary-btn,
+button {
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+button {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.secondary-btn {
+  color: #334155;
+  background: #fff;
+}
+
+.auth-root {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(420px, 92vw);
+  background: #fff;
+  border: 1px solid #dbe7f6;
+  border-radius: 14px;
+  padding: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.auth-card h1 {
+  margin: 0;
+}
+
+.auth-card p {
+  margin: 0 0 4px;
+  color: #64748b;
+}
+
+.auth-card input {
+  border: 1px solid #dbe7f6;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.center-screen {
+  min-height: 50vh;
+  display: grid;
+  place-items: center;
+  color: #334155;
+}
+
+.gap-16 {
+  display: grid;
+  gap: 16px;
+}
+
+.muted {
+  color: #64748b;
+}
+
+@media (max-width: 900px) {
+  .header-split {
+    grid-template-columns: 1fr;
+  }
+
+  .discipline-countdown {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 980px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #d9e2ef;
+  }
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
