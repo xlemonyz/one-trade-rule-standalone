@@ -431,24 +431,26 @@ button:disabled {
   background: #fff;
   border: 1px solid #e5e5e5;
   border-radius: 8px;
-  padding: 24px;
+  padding: 28px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .auth-card h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.2px;
+  color: #1a1a1a;
 }
 
 .auth-card p {
-  margin: 0 0 8px;
+  margin: 0 0 0px;
   color: #888;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.1px;
+  line-height: 1.5;
 }
 
 .auth-card input {
@@ -469,7 +471,7 @@ button:disabled {
 }
 
 .auth-card input::placeholder {
-  color: #aaa;
+  color: #bbb;
 }
 
 .center-screen {
@@ -479,6 +481,85 @@ button:disabled {
   color: #888;
   font-size: 12px;
   font-weight: 500;
+}
+
+.auth-social {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.auth-social-btn {
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  border-radius: 5px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  letter-spacing: -0.1px;
+}
+
+.auth-social-btn:hover {
+  border-color: #d0d0d0;
+  background: #f9f9f9;
+}
+
+.auth-social-btn .icon {
+  font-size: 14px;
+}
+
+.auth-divider {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #bbb;
+  letter-spacing: 0.8px;
+  margin: 4px 0;
+}
+
+.form-group {
+  display: grid;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: -0.1px;
+}
+
+.auth-submit {
+  background: #666;
+  border-color: #666;
+  color: #fff;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.auth-submit:hover:not(:disabled) {
+  background: #555;
+  border-color: #555;
+}
+
+.auth-toggle {
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  color: #666;
+  font-weight: 600;
+  margin-top: 0px;
+}
+
+.auth-toggle:hover {
+  background: #f9f9f9;
+  border-color: #d0d0d0;
 }
 
 .gap-16 {

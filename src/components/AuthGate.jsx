@@ -40,37 +40,74 @@ export function AuthGate() {
   return (
     <div className="auth-root">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1>One Trade Rule</h1>
-        <p>Standalone discipline engine for MT5 challenge tracking.</p>
+        <h1>{mode === "signup" ? "Create an account" : "Sign In"}</h1>
+        <p>
+          {mode === "signup"
+            ? "Enter your email below to create your account"
+            : "Welcome back to One Trade Rule"}
+        </p>
+
+        <div className="auth-social">
+          <button
+            type="button"
+            className="auth-social-btn"
+            onClick={() => alert("GitHub login coming soon")}
+          >
+            <span className="icon">⊕</span> GitHub
+          </button>
+          <button
+            type="button"
+            className="auth-social-btn"
+            onClick={() => alert("Google login coming soon")}
+          >
+            <span className="icon">⊕</span> Google
+          </button>
+        </div>
+
+        <div className="auth-divider">OR CONTINUE WITH</div>
+
         {mode === "signup" ? (
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Username"
-            autoComplete="username"
-          />
+          <div className="form-group">
+            <label>Username</label>
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="your username"
+              autoComplete="username"
+            />
+          </div>
         ) : null}
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email"
-          autoComplete="email"
-          required
-        />
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          required
-        />
-        <button type="submit" disabled={busy}>
-          {busy ? "Please wait..." : mode === "signup" ? "Create Account" : "Sign In"}
+
+        <div className="form-group">
+          <label>Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="m@example.com"
+            autoComplete="email"
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder=""
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            required
+          />
+        </div>
+
+        <button type="submit" disabled={busy} className="auth-submit">
+          {busy ? "Please wait..." : mode === "signup" ? "Create account" : "Sign In"}
         </button>
+
         <button
           type="button"
-          className="secondary-btn"
+          className="auth-toggle"
           onClick={() => {
             setMode(mode === "signup" ? "signin" : "signup");
             setError("");
@@ -79,6 +116,7 @@ export function AuthGate() {
         >
           {mode === "signup" ? "Have an account? Sign In" : "Need account? Sign Up"}
         </button>
+
         {message ? <div className="notice success">{message}</div> : null}
         {error ? <div className="notice error">{error}</div> : null}
       </form>
