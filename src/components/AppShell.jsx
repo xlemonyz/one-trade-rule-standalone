@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const NAV_ITEMS = [
   { to: "/one-trade-rule", label: "One Trade Rule" },
+  { to: "/history", label: "History" },
   { to: "/mt5-sync", label: "MT5 Sync" },
   { to: "/settings", label: "Settings" },
 ];

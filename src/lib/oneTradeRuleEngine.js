@@ -54,6 +54,16 @@ export function normalizeTradeRecord(trade) {
     brokerTicket: String(
       merged.brokerTicket || merged.broker_ticket || payload.brokerTicket || payload.broker_ticket || payload.ticket || ""
     ),
+    brokerAccountNumber: String(
+      merged.brokerAccountNumber ||
+        merged.broker_account_number ||
+        payload.brokerAccountNumber ||
+        payload.broker_account_number ||
+        ""
+    ),
+    brokerServer: String(
+      merged.brokerServer || merged.broker_server || payload.brokerServer || payload.broker_server || ""
+    ),
     importedAt,
     trading_day_key: String(merged.trading_day_key || merged.tradingDayKey || payload.trading_day_key || "").slice(0, 10),
     discipline_challenge_id: String(merged.discipline_challenge_id || merged.challenge_id || ""),
@@ -72,9 +82,35 @@ function isMt5Trade(trade) {
   return source === "mt5" || source.includes("auto imported");
 }
 
+function getLegacyTicket(trade) {
+  return String(trade?.brokerTicket || trade?.broker_ticket || "").trim();
+}
+
+function normalizeScopePart(value) {
+  const raw = String(value || "").trim();
+  return raw || "__missing__";
+}
+
+function getScopedTicketKey(trade) {
+  const ticket = getLegacyTicket(trade);
+  if (!ticket) return "";
+  const account = normalizeScopePart(trade?.brokerAccountNumber || trade?.broker_account_number);
+  const server = normalizeScopePart(trade?.brokerServer || trade?.broker_server);
+  return `${account}|${server}|${ticket}`;
+}
+
+function getTicketLookupKeys(trade) {
+  const scoped = getScopedTicketKey(trade);
+  const legacy = getLegacyTicket(trade);
+  const keys = [];
+  if (scoped) keys.push(`scoped:${scoped}`);
+  if (legacy) keys.push(`legacy:${legacy}`);
+  return keys;
+}
+
 function getOneTradeDuplicateKey(trade) {
-  const ticket = String(trade?.brokerTicket || trade?.broker_ticket || "").trim();
-  if (ticket) return `ticket:${ticket}`;
+  const scopedTicket = getScopedTicketKey(trade);
+  if (scopedTicket) return `ticket:${scopedTicket}`;
   const date = String(trade?.date || "");
   const time = String(trade?.time || "");
   const pair = String(trade?.pair || "");
@@ -131,8 +167,8 @@ export function normalizeChallengeTradeSet(sourceRule, sourceTrades, nowDate = n
 
     // Challenge-only duplicate guard: same challenge + same ticket should keep one record.
     const challengeId = String(withKey.discipline_challenge_id || withKey.challenge_id || "").trim();
-    const ticket = String(withKey.brokerTicket || "").trim();
-    const key = challengeId && ticket ? `challenge-ticket:${challengeId}:${ticket}` : getOneTradeDuplicateKey(withKey);
+    const scopedTicket = getScopedTicketKey(withKey);
+    const key = challengeId && scopedTicket ? `challenge-ticket:${challengeId}:${scopedTicket}` : getOneTradeDuplicateKey(withKey);
     if (key && dedupe.has(key)) {
       changed = true;
       continue;
@@ -166,10 +202,10 @@ export function attachMt5TradesToActiveChallenge(sourceRule, sourceTrades, nowDa
   const dedupe = new Set(existing.map(getOneTradeDuplicateKey));
   const ticketChallengeMap = new Map();
   existing.forEach((trade) => {
-    const ticket = String(trade?.brokerTicket || "").trim();
-    if (!ticket) return;
     const mappedChallenge = String(trade?.discipline_challenge_id || "");
-    if (!ticketChallengeMap.has(ticket)) ticketChallengeMap.set(ticket, mappedChallenge);
+    getTicketLookupKeys(trade).forEach((lookupKey) => {
+      if (!ticketChallengeMap.has(lookupKey)) ticketChallengeMap.set(lookupKey, mappedChallenge);
+    });
   });
 
   const blockedBeforeStart = new Set(
@@ -182,20 +218,26 @@ export function attachMt5TradesToActiveChallenge(sourceRule, sourceTrades, nowDa
   let changed = false;
   for (const trade of trades) {
     if (!isMt5Trade(trade)) continue;
-    const ticket = String(trade?.brokerTicket || "").trim();
-    if (ticket && blockedBeforeStart.has(ticket)) continue;
+    const ticket = getLegacyTicket(trade);
+    const scopedTicket = getScopedTicketKey(trade);
+    if ((scopedTicket && blockedBeforeStart.has(scopedTicket)) || (ticket && blockedBeforeStart.has(ticket))) continue;
 
     const duplicateKey = getOneTradeDuplicateKey(trade);
     if (duplicateKey && dedupe.has(duplicateKey)) continue;
 
-    const alreadyMappedChallenge = ticket ? String(ticketChallengeMap.get(ticket) || "") : "";
-    if (ticket && alreadyMappedChallenge && alreadyMappedChallenge !== challengeId) continue;
+    const lookupKeys = getTicketLookupKeys(trade);
+    const alreadyMappedChallenge = lookupKeys.reduce((found, key) => {
+      if (found) return found;
+      return String(ticketChallengeMap.get(key) || "");
+    }, "");
+    if (lookupKeys.length > 0 && alreadyMappedChallenge && alreadyMappedChallenge !== challengeId) continue;
 
     const eventMs = getTradeEventTimestampMsForChallenge(trade, marketSettings);
     const importedMs = asDate(trade?.importedAt)?.getTime() || 0;
     const effectiveMs = Number.isFinite(eventMs) && eventMs > 0 ? eventMs : importedMs;
     if (challengeStartMs > 0 && effectiveMs > 0 && effectiveMs < challengeStartMs) {
-      if (ticket) blockedBeforeStart.add(ticket);
+      if (scopedTicket) blockedBeforeStart.add(scopedTicket);
+      else if (ticket) blockedBeforeStart.add(ticket);
       continue;
     }
 
@@ -219,7 +261,7 @@ export function attachMt5TradesToActiveChallenge(sourceRule, sourceTrades, nowDa
     attached.push(attachedTrade);
     changed = true;
     if (duplicateKey) dedupe.add(duplicateKey);
-    if (ticket) ticketChallengeMap.set(ticket, challengeId);
+    lookupKeys.forEach((key) => ticketChallengeMap.set(key, challengeId));
   }
 
   if (!changed && blockedBeforeStart.size === (challenge?.blocked_mt5_tickets_before_start || []).length) {

@@ -75,6 +75,24 @@ function getDayGap(prevDate, nextDate) {
   return Math.round((b - a) / 86400000);
 }
 
+function getPreviousCountableTradingDay(dateKey, settings) {
+  let cursor = shiftDateKey(dateKey, -1);
+  for (let guard = 0; guard < 14; guard += 1) {
+    if (isCountableTradingDay(cursor, settings)) return cursor;
+    cursor = shiftDateKey(cursor, -1);
+  }
+  return shiftDateKey(dateKey, -1);
+}
+
+function getNextCountableTradingDay(dateKey, settings) {
+  let cursor = shiftDateKey(dateKey, 1);
+  for (let guard = 0; guard < 14; guard += 1) {
+    if (isCountableTradingDay(cursor, settings)) return cursor;
+    cursor = shiftDateKey(cursor, 1);
+  }
+  return shiftDateKey(dateKey, 1);
+}
+
 function isWeekendKey(dateKey, timeZone) {
   const parsed = parseDateKey(dateKey);
   if (!parsed) return false;
@@ -85,6 +103,12 @@ function isWeekendKey(dateKey, timeZone) {
   );
   const weekday = getTimeZoneParts(noonUtc, timeZone).weekday;
   return weekday === "Sat" || weekday === "Sun";
+}
+
+export function isCountableTradingDay(dateKey, settingsInput = {}) {
+  const settings = normalizeDisciplineMarketSettings(settingsInput);
+  if (!settings.weekend_closed) return true;
+  return !isWeekendKey(dateKey, settings.close_timezone);
 }
 
 function getTimeZoneParts(date, timeZone) {
@@ -189,6 +213,10 @@ export const DISCIPLINE_CHALLENGE_STATUS = {
   ARCHIVED: "ARCHIVED",
 };
 
+export const DISCIPLINE_COUNTING_MODE = {
+  TRADING_DAYS: "TRADING_DAYS",
+};
+
 export const DEFAULT_DISCIPLINE_MARKET_SETTINGS = {
   market_symbol: "XAUUSD",
   close_mode: "GOLD_MARKET_CLOSE",
@@ -236,6 +264,19 @@ function normalizeChallengeStatus(status) {
   return Object.values(DISCIPLINE_CHALLENGE_STATUS).includes(raw)
     ? raw
     : DISCIPLINE_CHALLENGE_STATUS.ACTIVE;
+}
+
+function normalizeCountingMode(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  return raw === DISCIPLINE_COUNTING_MODE.TRADING_DAYS ? raw : "";
+}
+
+function isTradingDayChallenge(challenge = {}) {
+  return (
+    normalizeCountingMode(challenge?.counting_mode || challenge?.countingMode) ===
+      DISCIPLINE_COUNTING_MODE.TRADING_DAYS &&
+    Boolean(challenge?.market_closed_days_not_counted ?? challenge?.marketClosedDaysNotCounted)
+  );
 }
 
 function normalizeDayStatus(status) {
@@ -314,6 +355,10 @@ export function normalizeDisciplineChallenge(challenge = {}, projectId = "") {
     status: normalizeChallengeStatus(challenge.status),
     challenge_number: challengeNumber,
     challenge_name: challengeNameRaw || `${targetCleanDays} Clean Days Challenge`,
+    counting_mode: normalizeCountingMode(challenge.counting_mode || challenge.countingMode),
+    market_closed_days_not_counted: Boolean(
+      challenge.market_closed_days_not_counted ?? challenge.marketClosedDaysNotCounted
+    ),
     restart_on_break:
       challenge.restart_on_break === undefined
         ? true
@@ -638,14 +683,14 @@ export function startDisciplineChallenge(project, config = {}) {
   const requestedTarget = Number(
     typeof config === "number" ? config : config?.targetCleanDays || config?.target_clean_days
   );
-  const normalizedTarget = [5, 10, 15].includes(requestedTarget)
+  const normalizedTarget = [5, 10, 20, 30].includes(requestedTarget)
     ? requestedTarget
-    : 10;
+    : 5;
   const currentCounter = Math.max(0, asNumber(project?.disciplineChallengeCounter, 0));
   const nextChallengeNumber = currentCounter + 1;
   const requestedName =
     typeof config === "object" ? String(config?.challengeName || config?.challenge_name || "").trim() : "";
-  const challengeName = requestedName || `${normalizedTarget} Clean Days Challenge`;
+  const challengeName = requestedName || `${normalizedTarget} Trading Days Challenge`;
 
   const challenges = Array.isArray(project?.disciplineChallenges)
     ? project.disciplineChallenges.map((item) => normalizeDisciplineChallenge(item, bindingProjectId))
@@ -672,6 +717,8 @@ export function startDisciplineChallenge(project, config = {}) {
       current_streak: 0,
       rule_breaks: 0,
       status: DISCIPLINE_CHALLENGE_STATUS.ACTIVE,
+      counting_mode: DISCIPLINE_COUNTING_MODE.TRADING_DAYS,
+      market_closed_days_not_counted: true,
       restart_on_break: true,
       start_date: today,
       challenge_name: challengeName,
@@ -836,6 +883,9 @@ function buildRecentDays(days = [], length = 7, options = {}) {
     } else if (status === DISCIPLINE_DAY_STATUS.NO_TRADE) {
       symbol = "•";
       label = "No Trade Day";
+    } else if (status === DISCIPLINE_DAY_STATUS.MARKET_CLOSED) {
+      symbol = "•";
+      label = "Market Closed / Not Counted";
     }
     return { tradingDayKey: key, status, symbol, label };
   });
@@ -1013,6 +1063,7 @@ export function evaluateDisciplineState(project, options = {}) {
 
   const startDate = asDateValue(activeChallenge.start_date) || localDateValue();
   const challengeStartMs = getChallengeStartTimestampMs(activeChallenge);
+  const tradingDayMode = isTradingDayChallenge(activeChallenge);
 
   const challengeTrades = disciplineTrades
     .filter((trade) => trade?.discipline_challenge_id === activeChallenge.id && isClosedDisciplineTrade(trade))
@@ -1079,6 +1130,7 @@ export function evaluateDisciplineState(project, options = {}) {
         : ONE_TRADE_READINESS_STATE.NOT_CHECKED;
     const readinessBreach = tradesCount > 0 && rawTradeList.some((trade) => hasReadinessBreach(trade));
     const commitment = commitmentsByDate[date];
+    const countableTradingDay = !tradingDayMode || isCountableTradingDay(date, marketSettings);
     const marketCloseAt = zonedDateTimeToUtc(date, marketSettings.close_time, marketSettings.close_timezone);
     const shouldFinalizeDay = forceFinalize && date <= closeTradingDayKey;
     const marketClosed = now.getTime() >= marketCloseAt.getTime() || shouldFinalizeDay;
@@ -1087,6 +1139,7 @@ export function evaluateDisciplineState(project, options = {}) {
       previous?.status === DISCIPLINE_DAY_STATUS.CLEAN ||
       previous?.status === DISCIPLINE_DAY_STATUS.BROKEN ||
       previous?.status === DISCIPLINE_DAY_STATUS.NO_TRADE ||
+      previous?.status === DISCIPLINE_DAY_STATUS.MARKET_CLOSED ||
       previous?.status === DISCIPLINE_DAY_STATUS.NEEDS_REVIEW;
     const finalizedStillValid =
       !forceFinalize &&
@@ -1094,7 +1147,9 @@ export function evaluateDisciplineState(project, options = {}) {
       hasFinalizedTerminalStatus;
 
     let status;
-    if (finalizedStillValid) {
+    if (tradingDayMode && !countableTradingDay) {
+      status = DISCIPLINE_DAY_STATUS.MARKET_CLOSED;
+    } else if (finalizedStillValid) {
       status = previous.status;
     } else if (tradesCount === 0) {
       status = shouldFinalizeDay || marketClosed
@@ -1131,6 +1186,7 @@ export function evaluateDisciplineState(project, options = {}) {
       status === DISCIPLINE_DAY_STATUS.CLEAN ||
       status === DISCIPLINE_DAY_STATUS.BROKEN ||
       status === DISCIPLINE_DAY_STATUS.NO_TRADE ||
+      status === DISCIPLINE_DAY_STATUS.MARKET_CLOSED ||
       status === DISCIPLINE_DAY_STATUS.NEEDS_REVIEW
         ? previous?.finalized_at || nowIso
         : "";
@@ -1145,7 +1201,7 @@ export function evaluateDisciplineState(project, options = {}) {
         trades_count: tradesCount,
         is_clean_day:
           status === DISCIPLINE_DAY_STATUS.CLEAN ||
-          status === DISCIPLINE_DAY_STATUS.NO_TRADE,
+          (status === DISCIPLINE_DAY_STATUS.NO_TRADE && countableTradingDay),
         score,
         mindset_check_completed: mindsetCompleted,
         commitment_completed: Boolean(commitment),
@@ -1187,6 +1243,7 @@ export function evaluateDisciplineState(project, options = {}) {
     (day) =>
       (day.status === DISCIPLINE_DAY_STATUS.CLEAN ||
         day.status === DISCIPLINE_DAY_STATUS.NO_TRADE) &&
+      (!tradingDayMode || isCountableTradingDay(asDateValue(day.trading_day_key || day.trade_date), marketSettings)) &&
       day.finalized_at
   ).sort((a, b) =>
     asDateValue(a.trading_day_key || a.trade_date).localeCompare(
@@ -1208,9 +1265,11 @@ export function evaluateDisciplineState(project, options = {}) {
   let prevKey = "";
   for (const day of finalizedTimelineDesc) {
     const key = asDateValue(day.trading_day_key || day.trade_date);
+    if (tradingDayMode && day.status === DISCIPLINE_DAY_STATUS.MARKET_CLOSED) continue;
     const isSuccess =
       day.status === DISCIPLINE_DAY_STATUS.CLEAN ||
-      day.status === DISCIPLINE_DAY_STATUS.NO_TRADE;
+      (day.status === DISCIPLINE_DAY_STATUS.NO_TRADE &&
+        (!tradingDayMode || isCountableTradingDay(key, marketSettings)));
 
     if (!prevKey) {
       if (!isSuccess) break;
@@ -1220,7 +1279,9 @@ export function evaluateDisciplineState(project, options = {}) {
     }
 
     if (!isSuccess) break;
-    if (getDayGap(key, prevKey) !== 1) break;
+    if (tradingDayMode) {
+      if (getPreviousCountableTradingDay(prevKey, marketSettings) !== key) break;
+    } else if (getDayGap(key, prevKey) !== 1) break;
     currentStreak += 1;
     prevKey = key;
   }
@@ -1403,6 +1464,7 @@ export function closeOneTradeRuleDay(project, options = {}) {
     previousSavedStatus === DISCIPLINE_DAY_STATUS.CLEAN ||
     previousSavedStatus === DISCIPLINE_DAY_STATUS.NO_TRADE ||
     previousSavedStatus === DISCIPLINE_DAY_STATUS.BROKEN ||
+    previousSavedStatus === DISCIPLINE_DAY_STATUS.MARKET_CLOSED ||
     previousSavedStatus === DISCIPLINE_DAY_STATUS.NEEDS_REVIEW;
   const allowClosedDayRecalculation = Boolean(
     options?.allowClosedDayRecalculation ||
@@ -1654,7 +1716,7 @@ export function prepareNextDisciplineRun(project, options = {}) {
     asDateValue(options.brokenTradingDayKey || options.broken_trading_day_key) ||
     asDateValue(brokenRows.at(-1)?.trading_day_key || brokenRows.at(-1)?.trade_date) ||
     nowTradingDay.tradingDayKey;
-  const scheduledDayKey = shiftDateKey(latestBrokenDayKey, 1);
+  const scheduledDayKey = getNextCountableTradingDay(latestBrokenDayKey, marketSettings);
   const shouldActivate = nowTradingDay.tradingDayKey >= scheduledDayKey;
 
   const existingPrepared = challenges.find(
@@ -1714,9 +1776,11 @@ export function prepareNextDisciplineRun(project, options = {}) {
       status: shouldActivate
         ? DISCIPLINE_CHALLENGE_STATUS.ACTIVE
         : DISCIPLINE_CHALLENGE_STATUS.SCHEDULED,
+      counting_mode: DISCIPLINE_COUNTING_MODE.TRADING_DAYS,
+      market_closed_days_not_counted: true,
       restart_on_break: true,
       start_date: scheduledDayKey,
-      challenge_name: `${sourceChallenge.target_clean_days} Clean Days Challenge`,
+      challenge_name: `${sourceChallenge.target_clean_days} Trading Days Challenge`,
       challenge_number: nextChallengeCounter,
       prepared_from_challenge_id: sourceChallenge.id,
       scheduled_for_trading_day: scheduledDayKey,
@@ -1787,6 +1851,10 @@ export function getDisciplineDashboardMessage(summary) {
 export function getChallengeChecklist(activeChallenge, allChallengeDays = [], options = {}) {
   const target = Math.max(1, asNumber(activeChallenge?.target_clean_days, 0));
   const start = asDateValue(activeChallenge?.start_date) || localDateValue();
+  const tradingDayMode = isTradingDayChallenge(activeChallenge);
+  const marketSettings = normalizeDisciplineMarketSettings(
+    options.marketSettings || options.market_settings || {}
+  );
   const currentTradingDayKey = asDateValue(
     options.currentTradingDayKey || options.current_trading_day_key
   );
@@ -1825,14 +1893,39 @@ export function getChallengeChecklist(activeChallenge, allChallengeDays = [], op
     "";
   const normalizedFirstBrokenKey = asDateValue(firstBrokenKey);
 
-  return Array.from({ length: target }, (_, index) => {
-    const key = shiftDateKey(start, index);
+  const sequence = [];
+  if (tradingDayMode) {
+    let cursor = start;
+    let tradingDayNumber = 0;
+    for (let guard = 0; guard < target + 80 && tradingDayNumber < target; guard += 1) {
+      const countable = isCountableTradingDay(cursor, marketSettings);
+      if (countable) tradingDayNumber += 1;
+      sequence.push({
+        key: cursor,
+        dayNumber: countable ? tradingDayNumber : null,
+        countable,
+      });
+      cursor = shiftDateKey(cursor, 1);
+    }
+  } else {
+    for (let index = 0; index < target; index += 1) {
+      sequence.push({
+        key: shiftDateKey(start, index),
+        dayNumber: index + 1,
+        countable: true,
+      });
+    }
+  }
+
+  return sequence.map(({ key, dayNumber, countable }) => {
     const isAfterBrokenBoundary =
       Boolean(normalizedFirstBrokenKey) && key > normalizedFirstBrokenKey;
     const day = isAfterBrokenBoundary ? null : dayByKey.get(key) || null;
     const rawStatus = normalizeDayStatus(day?.status);
     const status =
-      currentTradingDayKey && key > currentTradingDayKey
+      tradingDayMode && !countable
+        ? DISCIPLINE_DAY_STATUS.MARKET_CLOSED
+        : currentTradingDayKey && key > currentTradingDayKey
         ? DISCIPLINE_DAY_STATUS.WAITING
         : rawStatus;
     let state = "WAITING";
@@ -1840,17 +1933,17 @@ export function getChallengeChecklist(activeChallenge, allChallengeDays = [], op
     else if (status === DISCIPLINE_DAY_STATUS.NO_TRADE) state = "NO_TRADE";
     else if (status === DISCIPLINE_DAY_STATUS.NEEDS_REVIEW) state = "NEEDS_REVIEW";
     else if (status === DISCIPLINE_DAY_STATUS.BROKEN) state = "BROKEN";
+    else if (status === DISCIPLINE_DAY_STATUS.MARKET_CLOSED) state = "MARKET_CLOSED";
     else if (
       status === DISCIPLINE_DAY_STATUS.PENDING ||
       status === DISCIPLINE_DAY_STATUS.PENDING_CLEAN ||
-      status === DISCIPLINE_DAY_STATUS.TRADE_TAKEN ||
-      status === DISCIPLINE_DAY_STATUS.MARKET_CLOSED
+      status === DISCIPLINE_DAY_STATUS.TRADE_TAKEN
     ) {
       state = "PENDING";
     }
 
     return {
-      day: index + 1,
+      day: dayNumber,
       tradingDayKey: key,
       state,
       done: state === "CLEAN" || state === "NO_TRADE",
@@ -1865,6 +1958,8 @@ export function getChallengeChecklist(activeChallenge, allChallengeDays = [], op
           ? "Needs Review"
           : state === "BROKEN"
           ? "Broken Day"
+          : state === "MARKET_CLOSED"
+          ? "Market Closed / Not Counted"
           : state === "PENDING"
           ? "Pending"
           : "Waiting",

@@ -147,7 +147,7 @@ select:focus {
 }
 
 .content {
-  padding: 32px 28px;
+  padding: 15px 15px;
 }
 
 .page-card {
@@ -162,6 +162,10 @@ select:focus {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.summary-grid.summary-grid-4 {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
 }
 
 .stat {
@@ -195,6 +199,19 @@ select:focus {
   line-height: 1;
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
+}
+
+.summary-countdown-stat .summary-countdown-value {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.summary-countdown-stat .meta {
+  color: #999;
+  font-size: 11px;
+  margin-top: 6px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
 }
 
 .section-title {
@@ -334,6 +351,23 @@ select:focus {
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.08);
 }
 
+.day-card.market-closed {
+  border-color: #e1e1e1;
+  background: #fbfbfb;
+  color: #777;
+}
+
+.day-card.market-closed:hover {
+  border-color: #d6d6d6;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.challenge-start-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .trade-card {
   border: 1px solid #e5e5e5;
   border-radius: 6px;
@@ -411,6 +445,161 @@ select:focus {
   display: grid;
   gap: 16px;
   grid-template-columns: 1fr 1fr;
+}
+
+.trade-day-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+
+.trade-day-grid > .page-card {
+  align-self: start;
+}
+
+.history-card {
+  gap: 10px;
+}
+
+.history-attempt-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.history-attempt-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.history-attempt-card:hover {
+  border-color: #d0d0d0;
+}
+
+.history-attempt-card.active {
+  border-color: #ccc;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  background: #f8f8f8;
+}
+
+.history-attempt-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-attempt-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.history-attempt-meta {
+  color: #888;
+  font-size: 11px;
+}
+
+.history-attempt-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: #666;
+  font-size: 11px;
+}
+
+.history-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.history-status-pill.ended {
+  border-color: #d4d4d4;
+  background: #f6f6f6;
+  color: #555;
+}
+
+.history-status-pill.live {
+  border-color: #ccc;
+  background: #f8f8f8;
+  color: #333;
+}
+
+.history-summary-grid {
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  font-size: 12px;
+}
+
+.history-day-report {
+  gap: 10px;
+}
+
+.history-day-section {
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  background: #fff;
+}
+
+.history-day-header {
+  display: grid;
+  gap: 2px;
+}
+
+.history-day-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.history-day-meta {
+  color: #888;
+  font-size: 11px;
+}
+
+.day-details-card {
+  gap: 8px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.day-details-card .section-title {
+  margin-bottom: 4px;
+}
+
+.day-details-card .selected-day-date {
+  margin: 0 0 2px;
+  color: #888;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+
+.day-details-list {
+  display: grid;
+  gap: 8px;
+}
+
+.day-details-card .trade-card {
+  padding-top: 12px;
+  padding-bottom: 12px;
 }
 
 .notices {
@@ -662,8 +851,14 @@ button:disabled {
   .split {
     grid-template-columns: 1fr;
   }
+  .trade-day-grid {
+    grid-template-columns: 1fr;
+  }
+  .history-summary-grid {
+    grid-template-columns: 1fr;
+  }
   .content {
-    padding: 20px 16px;
+    padding: 15px 15px;
   }
 }
 
@@ -700,7 +895,11 @@ button:disabled {
     width: 100%;
   }
 
+  .challenge-start-options {
+    display: grid;
+  }
+
   .content {
-    padding: 20px 16px;
+    padding: 15px 15px;
   }
 }

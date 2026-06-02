@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test",
+    "test:mt5-import": "node scripts/verify-mt5-import-contract.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",

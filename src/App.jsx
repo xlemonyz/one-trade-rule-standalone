@@ -18,6 +18,7 @@ import {
   loadChallengeTrades,
 } from "./lib/supabaseData.js";
 import { OneTradeRulePage } from "./pages/OneTradeRulePage.jsx";
+import { HistoryPage } from "./pages/HistoryPage.jsx";
 import { MT5SyncPage } from "./pages/MT5SyncPage.jsx";
 import { SettingsPage } from "./pages/SettingsPage.jsx";
 
@@ -176,6 +177,10 @@ export default function App() {
                 onRuleChange={persistRule}
               />
             }
+          />
+          <Route
+            path="/history"
+            element={<HistoryPage ruleState={ruleState} trades={trades} />}
           />
           <Route
             path="/mt5-sync"

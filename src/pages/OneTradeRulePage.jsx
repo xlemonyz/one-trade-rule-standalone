@@ -9,10 +9,13 @@ import {
   startDisciplineChallenge,
 } from "../lib/disciplineUtils.js";
 
+const TRADING_DAY_TARGETS = [5, 10, 20, 30];
+
 function classForDayState(state) {
   if (state === DISCIPLINE_DAY_STATUS.CLEAN) return "day-card clean";
   if (state === DISCIPLINE_DAY_STATUS.BROKEN) return "day-card broken";
   if (state === DISCIPLINE_DAY_STATUS.NO_TRADE) return "day-card no-trade";
+  if (state === DISCIPLINE_DAY_STATUS.MARKET_CLOSED || state === "MARKET_CLOSED") return "day-card market-closed";
   return "day-card";
 }
 
@@ -21,6 +24,7 @@ function normalizeStatusLabel(state) {
   if (state === DISCIPLINE_DAY_STATUS.WAITING || state === "WAITING") return "Waiting";
   if (state === "PENDING") return "Pending";
   if (state === DISCIPLINE_DAY_STATUS.NO_TRADE) return "No Trade Day";
+  if (state === DISCIPLINE_DAY_STATUS.MARKET_CLOSED || state === "MARKET_CLOSED") return "Market Closed / Not Counted";
   if (state === DISCIPLINE_DAY_STATUS.PENDING_CLEAN) return "Pending";
   if (state === DISCIPLINE_DAY_STATUS.CLEAN) return "Clean Trade Day";
   if (state === DISCIPLINE_DAY_STATUS.BROKEN) return "Broken Day";
@@ -32,6 +36,13 @@ function formatDisplayDate(value) {
   const date = raw ? new Date(`${raw}T12:00:00`) : null;
   if (!date || Number.isNaN(date.getTime())) return raw;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatRunCardDate(value) {
+  const raw = String(value || "").slice(0, 10);
+  const date = raw ? new Date(`${raw}T12:00:00`) : null;
+  if (!date || Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function formatMoney(value) {
@@ -78,9 +89,10 @@ export function OneTradeRulePage({ ruleState, liveTrades, onRuleChange }) {
       if (!activeChallenge?.id) return [];
       return getChallengeChecklist(activeChallenge, scopedChallengeDays, {
         now: new Date(),
+        marketSettings: project?.disciplineMarketSettings || {},
       });
     },
-    [activeChallenge?.id, activeChallenge, scopedChallengeDays]
+    [activeChallenge?.id, activeChallenge, scopedChallengeDays, project?.disciplineMarketSettings]
   );
 
   const selectedDay = activeChallenge?.id
@@ -123,12 +135,12 @@ export function OneTradeRulePage({ ruleState, liveTrades, onRuleChange }) {
       }
     : null;
 
-  async function handleStartChallenge() {
+  async function handleStartChallenge(targetCleanDays = 5) {
     setBusy(true);
     try {
       const started = startDisciplineChallenge(project, {
-        targetCleanDays: 5,
-        challengeName: "5 Clean Days Challenge",
+        targetCleanDays,
+        challengeName: `${targetCleanDays} Trading Days Challenge`,
         now: new Date(),
       });
       const evaluated = evaluateDisciplineState(started, { now: new Date() }).project;
@@ -160,24 +172,21 @@ export function OneTradeRulePage({ ruleState, liveTrades, onRuleChange }) {
             <h1 className="section-title">One Trade Rule</h1>
             <p className="section-subtitle">ONE TRADE. ONE DECISION. NO REVENGE.</p>
           </div>
-          <div className="discipline-countdown">
-            <div className="label">Protect Your Discipline</div>
-            <div className="value">{countdownLabel}</div>
-            <div className="meta">Gold Day: {goldDayLabel || "--"}</div>
-          </div>
         </div>
         {!activeChallenge ? (
           <div className="row">
             <p>No active challenge. Start your standalone challenge run.</p>
-            <div>
-              <button onClick={handleStartChallenge} disabled={busy}>
-                {busy ? "Starting..." : "Start 5 Clean Days Challenge"}
-              </button>
+            <div className="challenge-start-options">
+              {TRADING_DAY_TARGETS.map((target) => (
+                <button key={target} onClick={() => handleStartChallenge(target)} disabled={busy}>
+                  {busy ? "Starting..." : `Start ${target} Trading Days Challenge`}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
           <>
-            <div className="summary-grid">
+            <div className="summary-grid summary-grid-4">
               <div className="stat">
                 <div className="label">Progress</div>
                 <div className="value">
@@ -193,6 +202,11 @@ export function OneTradeRulePage({ ruleState, liveTrades, onRuleChange }) {
               <div className="stat">
                 <div className="label">Streak</div>
                 <div className="value">{challengeProgress.streak}</div>
+              </div>
+              <div className="stat summary-countdown-stat">
+                <div className="label">Protect Your Discipline</div>
+                <div className="value summary-countdown-value">{countdownLabel}</div>
+                <div className="meta">Gold Day: {goldDayLabel || "--"}</div>
               </div>
             </div>
             <div className="row" style={{ gridTemplateColumns: "1fr auto", alignItems: "center" }}>
@@ -226,51 +240,76 @@ export function OneTradeRulePage({ ruleState, liveTrades, onRuleChange }) {
               tabIndex={0}
               style={{ cursor: "pointer" }}
             >
-              <div style={{ fontWeight: 700 }}>Day {day.day}</div>
-              <div>{normalizeStatusLabel(day.state)}</div>
-              <div className="meta">{formatDisplayDate(day.tradingDayKey)}</div>
+              <div style={{ fontWeight: 700 }}>{day.day ? `Day ${day.day}` : "Market Closed"}</div>
+              {day.state === DISCIPLINE_DAY_STATUS.MARKET_CLOSED || day.state === "MARKET_CLOSED" ? null : (
+                <div>{normalizeStatusLabel(day.state)}</div>
+              )}
+              <div className="meta">{formatRunCardDate(day.tradingDayKey)}</div>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="page-card row">
-        <h2 className="section-title">Today&apos;s Trade (Live)</h2>
-        <p className="section-subtitle">Live trades for the current open trading day.</p>
-        {!liveTrades.length ? <div className="stat">No entries yet in this challenge journal.</div> : null}
-        {liveTrades.map((trade) => (
-          <article key={`${trade.id}-${trade.brokerTicket || ""}`} className="trade-card">
-            <div>
+      <div className="trade-day-grid">
+        <section className="page-card row" style={{ gap: 10 }}>
+          <h2 className="section-title" style={{ marginBottom: 0 }}>Today&apos;s Trade (Live)</h2>
+          {!liveTrades.length ? <div className="stat">No entries yet in this challenge journal.</div> : null}
+          {liveTrades.map((trade) => (
+            <article key={`${trade.id}-${trade.brokerTicket || ""}`} className="trade-card">
               <div>
-                <span className="badge">Trade</span>{" "}
-                {Number(trade?.oneTradeOrderNumber || 0) >= 2 ? <span className="badge red">Overtrade</span> : null}
+                <div>
+                  {Number(trade?.oneTradeOrderNumber || 0) >= 2 ? <span className="badge red">Overtrade</span> : null}
+                </div>
+                <strong>{trade.pair}</strong> • {trade.direction} • Gold Day: {trade.trading_day_key || trade.date}
+                <div className="meta">MT5 broker date: {trade.date || "--"} • Ticket: {trade.brokerTicket || "--"}</div>
               </div>
-              <strong>{trade.pair}</strong> • {trade.direction} • Gold Day: {trade.trading_day_key || trade.date}
-              <div className="meta">MT5 broker date: {trade.date || "--"} • Ticket: {trade.brokerTicket || "--"}</div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div className={Number(trade.pnl || 0) < 0 ? "badge red" : "badge"}>{formatMoney(trade.pnl)}</div>
-              <div className="meta">Lot {trade.lotSize || 0}</div>
-            </div>
-          </article>
-        ))}
-        {brokenLiveTrades > 0 ? <div className="notice error">Detected {brokenLiveTrades} overtrade entry(s).</div> : null}
-      </section>
+              <div
+                style={{
+                  alignSelf: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  justifyContent: "center",
+                  textAlign: "right",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 600,
+                    color:
+                      Number(trade.pnl || 0) < 0
+                        ? "#7a4444"
+                        : Number(trade.pnl || 0) > 0
+                        ? "#4a6b4a"
+                        : "#1a1a1a",
+                  }}
+                >
+                  {formatMoney(trade.pnl)}
+                </div>
+                <div className="meta">Lot {trade.lotSize || 0}</div>
+              </div>
+            </article>
+          ))}
+          {brokenLiveTrades > 0 ? <div className="notice error">Detected {brokenLiveTrades} overtrade entry(s).</div> : null}
+        </section>
 
-      <section className="page-card row">
-        <h2 className="section-title">Day Details</h2>
-        <p className="section-subtitle">{selectedDay ? formatDisplayDate(selectedDay) : "No day selected"}</p>
-        {!dayTrades.length ? <div className="stat">No MT5 trades for this day.</div> : null}
-        {dayTrades.map((trade) => (
-          <article key={`detail-${trade.id}-${trade.brokerTicket || ""}`} className="trade-card">
-            <div>
-              <strong>{trade.pair}</strong> • {trade.direction} • Gold Day: {trade.trading_day_key || trade.date}
-              <div className="meta">Broker date: {trade.date || "--"} {trade.time ? `• ${trade.time}` : ""}</div>
-            </div>
-            <div style={{ textAlign: "right" }}>{formatMoney(trade.pnl)}</div>
-          </article>
-        ))}
-      </section>
+        <section className="page-card row day-details-card">
+          <h2 className="section-title">Day Details</h2>
+          <p className="section-subtitle selected-day-date">{selectedDay ? formatDisplayDate(selectedDay) : "No day selected"}</p>
+          <div className="day-details-list">
+            {!dayTrades.length ? <div className="stat">No MT5 trades for this day.</div> : null}
+            {dayTrades.map((trade) => (
+              <article key={`detail-${trade.id}-${trade.brokerTicket || ""}`} className="trade-card">
+                <div>
+                  <strong>{trade.pair}</strong> • {trade.direction} • Gold Day: {trade.trading_day_key || trade.date}
+                  <div className="meta">Broker date: {trade.date || "--"} {trade.time ? `• ${trade.time}` : ""}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>{formatMoney(trade.pnl)}</div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
