@@ -150,6 +150,58 @@ select:focus {
   padding: 15px 15px;
 }
 
+.pathok-connect-root {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, #fff8e9 0, #eee0c5 48%, #d9c3a2 100%);
+}
+
+.pathok-connect-card {
+  width: min(100%, 440px);
+  padding: 36px;
+  border: 1px solid #d6c2a3;
+  border-radius: 22px;
+  background: rgba(255, 252, 244, 0.94);
+  box-shadow: 0 24px 70px rgba(75, 52, 31, 0.16);
+  text-align: center;
+}
+
+.pathok-connect-mark {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: #0c6fb8;
+  color: #96deff;
+  font-size: 40px;
+  font-weight: 700;
+}
+
+.pathok-connect-kicker {
+  margin: 0 0 8px;
+  color: #8a623d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.pathok-connect-card h1 { margin: 0 0 12px; font-size: 28px; }
+.pathok-connect-card > p { color: #665747; }
+.pathok-connect-user {
+  margin: 22px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f2e7d5;
+  color: #493b2d;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.pathok-connect-note { margin: 16px 0 0; font-size: 11px; }
+
 .page-card {
   background: #fff;
   border: 1px solid #e5e5e5;

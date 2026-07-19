@@ -21,6 +21,7 @@ import { OneTradeRulePage } from "./pages/OneTradeRulePage.jsx";
 import { HistoryPage } from "./pages/HistoryPage.jsx";
 import { MT5SyncPage } from "./pages/MT5SyncPage.jsx";
 import { SettingsPage } from "./pages/SettingsPage.jsx";
+import { PathokConnectPage } from "./pages/PathokConnectPage.jsx";
 
 function buildEvaluatedRule(rawRule, trades) {
   return evaluateDisciplineState(
@@ -148,6 +149,10 @@ export default function App() {
 
   if (!session?.user) {
     return <AuthGate />;
+  }
+
+  if (location.pathname === "/pathok-connect") {
+    return <PathokConnectPage session={session} />;
   }
 
   return (
