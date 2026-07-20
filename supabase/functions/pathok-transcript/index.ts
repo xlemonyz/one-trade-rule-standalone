@@ -92,18 +92,42 @@ function cleanTranscript(payload: Record<string, unknown>) {
 }
 
 async function extractTranscript(videoId: string) {
-  const response = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
+  const playerResponse = await fetch("https://www.youtube.com/youtubei/v1/player", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "User-Agent": "com.google.android.youtube/20.10.38" },
+    body: JSON.stringify({
+      context: {
+        client: {
+          clientName: "ANDROID",
+          clientVersion: "20.10.38",
+          androidSdkVersion: 35,
+          hl: "en",
+          gl: "US",
+        },
+      },
+      videoId,
+    }),
+  });
+  const androidPlayer = playerResponse.ok
+    ? await playerResponse.json().catch(() => null) as Record<string, any> | null
+    : null;
+  let player = androidPlayer;
+
+  if (!player || player.playabilityStatus?.status !== "OK") {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36",
       "Accept-Language": "en-US,en;q=0.9",
     },
-  });
-  if (!response.ok) throw new TranscriptError("YOUTUBE_BLOCKED", "YouTube is temporarily unavailable. Try again later.", 503);
-  const html = await response.text();
-  const rawPlayer = balancedJsonAfter(html, "ytInitialPlayerResponse")
-    ?? balancedJsonAfter(html, '"playerResponse":');
-  if (!rawPlayer) throw new TranscriptError("EXTRACTION_FAILED", "YouTube transcript data could not be read. Try again later.", 503);
-  const player = JSON.parse(rawPlayer) as Record<string, any>;
+    });
+    if (!response.ok) throw new TranscriptError("YOUTUBE_BLOCKED", "YouTube is temporarily unavailable. Try again later.", 503);
+    const html = await response.text();
+    const rawPlayer = balancedJsonAfter(html, "ytInitialPlayerResponse")
+      ?? balancedJsonAfter(html, '"playerResponse":');
+    if (!rawPlayer) throw new TranscriptError("EXTRACTION_FAILED", "YouTube transcript data could not be read. Try again later.", 503);
+    player = JSON.parse(rawPlayer) as Record<string, any>;
+  }
+
   const playability = player.playabilityStatus?.status;
   if (playability && playability !== "OK") {
     throw new TranscriptError("VIDEO_UNAVAILABLE", String(player.playabilityStatus?.reason ?? "This video is unavailable."));
