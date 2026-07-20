@@ -98,9 +98,38 @@
 .pathok-reader-controls .pathok-pills { margin: 0; }
 .pathok-reader-controls a { margin-left: auto; }
 .pathok-reading-scroll { overflow: auto; scroll-behavior: smooth; padding: 40px clamp(30px, 8vw, 110px) 90px; }
-.pathok-reading-scroll article { max-width: 760px; margin: 0 auto; }
-.pathok-reading-scroll p { margin: 0 0 1.25em; color: #332e27; font: 18px/1.9 "Literata", "Anek Bangla", serif; }
-.pathok-reading-scroll article[lang="bn"] p { font-family: "Anek Bangla", sans-serif; font-size: 20px; line-height: 1.9; }
+.pathok-reading-scroll article { max-width: var(--reader-width, 740px); margin: 0 auto; transition: max-width .2s ease; }
+.pathok-reading-scroll p { margin: 0 0 1.25em; color: #332e27; font: var(--reader-font-size, 18px)/1.9 "Literata", "Anek Bangla", serif; }
+.pathok-reading-scroll article[lang="bn"] p { font-family: "Anek Bangla", sans-serif; font-size: var(--reader-font-size, 20px); line-height: 1.9; }
+.pathok-focus-mode { position: fixed; inset: 0; z-index: 9999; width: 100vw; height: 100dvh; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; border: 0; border-radius: 0; background: #f7efe1; color: #2f2922; }
+.pathok-focus-mode.pathok-theme-white { background: #fff; color: #202020; }
+.pathok-focus-mode.pathok-theme-night { --pathok-ink: #eee8dc; --pathok-muted: #aaa193; --pathok-line: #4a453e; --pathok-accent: #e0a078; background: #242321; color: #eee8dc; }
+.pathok-focus-mode .pathok-normal-reader-ui { display: none; }
+.pathok-focus-mode .pathok-reading-scroll { grid-row: 1; height: 100dvh; padding-top: max(84px, calc(env(safe-area-inset-top) + 70px)); padding-bottom: max(90px, calc(env(safe-area-inset-bottom) + 72px)); background: transparent; }
+.pathok-focus-mode .pathok-reading-scroll p { color: inherit; }
+.pathok-theme-white.pathok-focus-mode .pathok-reading-scroll p { color: #202020; }
+.pathok-theme-night.pathok-focus-mode .pathok-reading-scroll p { color: #eee8dc; }
+.pathok-focus-toolbar { position: absolute; z-index: 4; top: max(12px, env(safe-area-inset-top)); left: 50%; width: min(calc(100% - 28px), 1180px); transform: translate(-50%, -10px); display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 12px 10px 16px; border: 1px solid rgba(125, 104, 79, .3); border-radius: 14px; background: rgba(255, 252, 245, .93); box-shadow: 0 12px 35px rgba(54, 40, 25, .13); backdrop-filter: blur(16px); opacity: 0; pointer-events: none; transition: opacity .22s ease, transform .22s ease; }
+.pathok-theme-white .pathok-focus-toolbar { background: rgba(255,255,255,.94); }
+.pathok-theme-night .pathok-focus-toolbar { border-color: #555049; background: rgba(43,42,39,.95); box-shadow: 0 12px 35px rgba(0,0,0,.28); }
+.pathok-focus-toolbar.visible { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+.pathok-focus-title { min-width: 0; display: grid; gap: 2px; }
+.pathok-focus-title span { color: var(--pathok-accent); font: 700 9px/1.2 var(--font-mono); letter-spacing: .13em; }
+.pathok-focus-title strong { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px "Literata", serif; }
+.pathok-focus-tools { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
+.pathok-focus-tools .pathok-pills { margin: 0; }
+.pathok-focus-tools select { width: auto; min-height: 34px; padding: 6px 9px; border-color: var(--pathok-line); border-radius: 8px; background: transparent; color: inherit; font-size: 11px; }
+.pathok-theme-night .pathok-focus-tools select option { background: #302f2c; color: #eee8dc; }
+.pathok-focus-group { display: flex; align-items: center; gap: 2px; border: 1px solid var(--pathok-line); border-radius: 999px; padding: 2px; }
+.pathok-focus-group button { width: 34px; min-height: 30px; padding: 3px; border: 0; border-radius: 999px; background: transparent; color: inherit; }
+.pathok-focus-group button:hover:not(:disabled) { background: rgba(125,105,80,.12); border: 0; box-shadow: none; color: inherit; }
+.pathok-focus-group span { min-width: 34px; text-align: center; color: var(--pathok-muted); font: 10px var(--font-mono); }
+.pathok-focus-tools .pathok-focus-exit { width: auto; min-height: 34px; padding: 6px 11px; border-color: var(--pathok-accent); background: var(--pathok-accent); color: #fff; }
+.pathok-focus-progress { position: absolute; z-index: 3; inset: auto 0 0; height: 3px; background: rgba(128,106,79,.15); }
+.pathok-focus-progress i { display: block; height: 100%; background: var(--pathok-accent); transition: width .16s linear; }
+.pathok-focus-progress span { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: 12px; color: var(--pathok-muted); font: 10px var(--font-mono); }
+.pathok-reader-status { position: absolute; z-index: 5; left: 50%; bottom: max(18px, calc(env(safe-area-inset-bottom) + 8px)); transform: translateX(-50%); max-width: min(90vw, 520px); padding: 7px 11px; border: 1px solid var(--pathok-line); border-radius: 999px; background: rgba(255,253,247,.9); color: var(--pathok-muted); font-size: 11px; text-align: center; pointer-events: none; }
+.pathok-theme-night .pathok-reader-status { background: rgba(43,42,39,.92); }
 .pathok-empty-reader { display: grid; place-content: center; text-align: center; color: var(--pathok-muted); }
 .pathok-empty-reader h3 { margin: 0; color: var(--pathok-ink); }
 .pathok-empty-reader p { margin: 8px 0; }
@@ -144,6 +173,14 @@
   .pathok-reading-scroll { padding: 28px 21px 70px; }
   .pathok-reading-scroll p { font-size: 16px; line-height: 1.8; }
   .pathok-reading-scroll article[lang="bn"] p { font-size: 18px; }
+  .pathok-focus-toolbar { top: max(8px, env(safe-area-inset-top)); width: calc(100% - 16px); align-items: flex-start; padding: 9px; }
+  .pathok-focus-title { display: none; }
+  .pathok-focus-tools { width: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .pathok-focus-tools::-webkit-scrollbar { display: none; }
+  .pathok-focus-tools > * { flex: 0 0 auto; }
+  .pathok-focus-tools .pathok-pills button { width: auto; }
+  .pathok-focus-mode .pathok-reading-scroll { padding: max(80px, calc(env(safe-area-inset-top) + 68px)) 22px max(80px, calc(env(safe-area-inset-bottom) + 64px)); }
+  .pathok-focus-mode .pathok-reading-scroll p, .pathok-focus-mode .pathok-reading-scroll article[lang="bn"] p { font-size: var(--reader-font-size); }
 }
 
 @media (prefers-reduced-motion: reduce) {

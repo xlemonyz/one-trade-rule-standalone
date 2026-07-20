@@ -16,6 +16,11 @@ import {
   splitReadingText,
   TRANSCRIPT_STATUS,
 } from "../lib/pathokModel.js";
+import {
+  changeReaderFontSize,
+  parseReaderPreferences,
+  READER_WIDTHS,
+} from "../lib/pathokReaderPreferences.js";
 import "../styles/pathok.css";
 
 function makeDocument(kind) {
@@ -363,21 +368,53 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
 function PathokReader({ document, onPatch, navigate, onNotice }) {
   const [language, setLanguage] = useState(document.content.trim() ? "BANGLA" : "ENGLISH");
   const [format, setFormat] = useState(document.readableTranscript ? "READABLE" : "COMPACT");
+  const [preferences, setPreferences] = useState(() => parseReaderPreferences(localStorage.getItem("pathok.reader.preferences")));
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusSnapshot, setFocusSnapshot] = useState(null);
+  const [toolbarVisible, setToolbarVisible] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [readerStatus, setReaderStatus] = useState("");
+  const readerRef = useRef(null);
   const scrollRef = useRef(null);
   const timerRef = useRef(null);
-  const english = format === "READABLE" && document.readableTranscript ? document.readableTranscript : document.originalTranscript || "";
-  const readingText = language === "BANGLA" ? document.content : english;
+  const hideTimerRef = useRef(null);
+  const activeDocument = focusMode && focusSnapshot ? focusSnapshot : document;
+  const english = format === "READABLE" && activeDocument.readableTranscript ? activeDocument.readableTranscript : activeDocument.originalTranscript || "";
+  const readingText = language === "BANGLA" ? activeDocument.content : english;
   const paragraphs = useMemo(() => splitReadingText(readingText), [readingText]);
+  const activeFontSize = language === "BANGLA" ? preferences.banglaFontSize : preferences.englishFontSize;
+  const deferredContent = focusMode && focusSnapshot && (
+    document.title !== focusSnapshot.title ||
+    document.content !== focusSnapshot.content ||
+    document.originalTranscript !== focusSnapshot.originalTranscript ||
+    document.readableTranscript !== focusSnapshot.readableTranscript
+  );
+
+  function persistPreferences(next) {
+    setPreferences(next);
+    localStorage.setItem("pathok.reader.preferences", JSON.stringify(next));
+  }
+
+  function revealToolbar() {
+    if (!focusMode) return;
+    setToolbarVisible(true);
+    window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => setToolbarVisible(false), 3000);
+  }
 
   useEffect(() => {
     const container = scrollRef.current;
-    const index = language === "BANGLA" ? document.scrollIndex : document.transcriptScrollIndex;
-    const offset = language === "BANGLA" ? document.scrollOffset : document.transcriptScrollOffset;
+    const index = language === "BANGLA" ? activeDocument.scrollIndex : activeDocument.transcriptScrollIndex;
+    const offset = language === "BANGLA" ? activeDocument.scrollOffset : activeDocument.transcriptScrollOffset;
     const target = container?.querySelector(`[data-paragraph="${index}"]`);
     if (container && target) container.scrollTop = target.offsetTop - container.offsetTop + offset;
+    if (container) window.requestAnimationFrame(() => {
+      const maximum = Math.max(1, container.scrollHeight - container.clientHeight);
+      setProgress(Math.min(100, Math.max(0, (container.scrollTop / maximum) * 100)));
+    });
     // Progress updates must not retrigger restoration while the user is scrolling.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [document.id, language, format]);
+  }, [activeDocument.id, language, format, focusMode]);
 
   function saveProgress() {
     const container = scrollRef.current;
@@ -390,43 +427,166 @@ function PathokReader({ document, onPatch, navigate, onNotice }) {
     const fields = language === "BANGLA"
       ? { scroll_index: index, scroll_offset: offset }
       : { transcript_scroll_index: index, transcript_scroll_offset: offset };
-    onPatch(document.id, { ...fields, updated_at_ms: Date.now() }).catch(() => {});
+    onPatch(activeDocument.id, { ...fields, updated_at_ms: Date.now() }).catch(() => {});
   }
 
   function onScroll() {
+    const container = scrollRef.current;
+    if (container) {
+      const maximum = Math.max(1, container.scrollHeight - container.clientHeight);
+      setProgress(Math.min(100, Math.max(0, (container.scrollTop / maximum) * 100)));
+    }
+    if (focusMode) setToolbarVisible(false);
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(saveProgress, 700);
   }
 
+  function changeLanguage(next) {
+    saveProgress();
+    setLanguage(next);
+    revealToolbar();
+  }
+
+  function changeFormat(next) {
+    saveProgress();
+    setFormat(next);
+    revealToolbar();
+  }
+
+  async function enterFocus() {
+    setFocusSnapshot({ ...document });
+    setFocusMode(true);
+    setToolbarVisible(true);
+    setReaderStatus("");
+    window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => setToolbarVisible(false), 3000);
+    if (typeof readerRef.current?.requestFullscreen !== "function") {
+      setReaderStatus("Browser fullscreen is unavailable. App focus mode is still active.");
+      return;
+    }
+    try {
+      await readerRef.current.requestFullscreen();
+    } catch {
+      setReaderStatus("Browser fullscreen was unavailable. App focus mode is still active.");
+    }
+  }
+
+  async function exitFocus() {
+    saveProgress();
+    window.clearTimeout(hideTimerRef.current);
+    if (globalThis.document.fullscreenElement === readerRef.current) await globalThis.document.exitFullscreen().catch(() => {});
+    setFocusMode(false);
+    setFocusSnapshot(null);
+    setToolbarVisible(true);
+    if (deferredContent) setReaderStatus("Latest changes from your library are now visible.");
+  }
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (focusMode && !globalThis.document.fullscreenElement) {
+        saveProgress();
+        setFocusMode(false);
+        setFocusSnapshot(null);
+        setToolbarVisible(true);
+      }
+    };
+    globalThis.document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => globalThis.document.removeEventListener("fullscreenchange", onFullscreenChange);
+  });
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      const tag = event.target?.tagName;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || event.target?.isContentEditable) return;
+      const key = event.key.toLowerCase();
+      if (key === "f") { event.preventDefault(); focusMode ? exitFocus() : enterFocus(); }
+      else if (key === "escape" && focusMode) exitFocus();
+      else if (key === "b" && activeDocument.content.trim()) changeLanguage("BANGLA");
+      else if (key === "e" && activeDocument.originalTranscript) changeLanguage("ENGLISH");
+      else if (key === "r" && activeDocument.readableTranscript) changeFormat("READABLE");
+      else if (key === "c" && activeDocument.originalTranscript) changeFormat("COMPACT");
+      else if (key === "+" || key === "=") persistPreferences(changeReaderFontSize(preferences, language, 1));
+      else if (key === "-") persistPreferences(changeReaderFontSize(preferences, language, -1));
+      if (focusMode) revealToolbar();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  useEffect(() => {
+    const flush = () => saveProgress();
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      window.clearTimeout(timerRef.current);
+      window.clearTimeout(hideTimerRef.current);
+    };
+  });
+
   async function copyText() {
     await navigator.clipboard.writeText(readingText);
-    onNotice(`${language === "BANGLA" ? "বাংলা text" : "Transcript"} copied.`);
+    const message = `${language === "BANGLA" ? "বাংলা text" : "Transcript"} copied.`;
+    setReaderStatus(message);
+    if (!focusMode) onNotice(message);
   }
 
   return (
-    <section className="pathok-reader">
-      <div className="pathok-reader-top">
-        <div><span>{document.kind === PATHOK_KIND.YOUTUBE ? "YOUTUBE READING" : "SAVED NOTE"}</span><h2>{document.title}</h2></div>
-        <div className="pathok-reader-actions"><button className="pathok-ghost-btn" onClick={copyText}>Copy</button><button className="pathok-ghost-btn" onClick={() => navigate(`/pathok/document/${document.id}/edit`)}>Edit</button></div>
+    <section
+      ref={readerRef}
+      className={`pathok-reader pathok-theme-${preferences.theme.toLowerCase()} ${focusMode ? "pathok-focus-mode" : ""}`}
+      style={{ "--reader-width": `${READER_WIDTHS[preferences.width]}px`, "--reader-font-size": `${activeFontSize}px` }}
+      onPointerMove={revealToolbar}
+      onPointerDown={revealToolbar}
+    >
+      {focusMode && (
+        <div className={`pathok-focus-toolbar ${toolbarVisible ? "visible" : ""}`} aria-hidden={!toolbarVisible} inert={!toolbarVisible}>
+          <div className="pathok-focus-title"><span>FOCUS READING</span><strong>{activeDocument.title}</strong></div>
+          <div className="pathok-focus-tools">
+            {activeDocument.kind === PATHOK_KIND.YOUTUBE && <LanguageToggle language={language} changeLanguage={changeLanguage} document={activeDocument} />}
+            {language === "ENGLISH" && <FormatToggle format={format} setFormat={changeFormat} readable={Boolean(activeDocument.readableTranscript)} />}
+            <div className="pathok-focus-group" aria-label="Font size">
+              <button onClick={() => persistPreferences(changeReaderFontSize(preferences, language, -1))} disabled={activeFontSize <= 16} aria-label="Decrease font size">A−</button>
+              <span>{activeFontSize}px</span>
+              <button onClick={() => persistPreferences(changeReaderFontSize(preferences, language, 1))} disabled={activeFontSize >= 30} aria-label="Increase font size">A+</button>
+            </div>
+            <select aria-label="Reading width" value={preferences.width} onChange={(event) => persistPreferences({ ...preferences, width: event.target.value })}>
+              <option value="NARROW">Narrow</option><option value="COMFORTABLE">Comfortable</option><option value="WIDE">Wide</option>
+            </select>
+            <select aria-label="Reading theme" value={preferences.theme} onChange={(event) => persistPreferences({ ...preferences, theme: event.target.value })}>
+              <option value="PAPER">Paper</option><option value="WHITE">White</option><option value="NIGHT">Night</option>
+            </select>
+            <button className="pathok-focus-exit" onClick={exitFocus}>Exit focus</button>
+          </div>
+        </div>
+      )}
+      <div className="pathok-reader-top pathok-normal-reader-ui">
+        <div><span>{activeDocument.kind === PATHOK_KIND.YOUTUBE ? "YOUTUBE READING" : "SAVED NOTE"}</span><h2>{activeDocument.title}</h2></div>
+        <div className="pathok-reader-actions"><button className="pathok-primary-btn" onClick={enterFocus}>Focus mode</button><button className="pathok-ghost-btn" onClick={copyText}>Copy</button><button className="pathok-ghost-btn" onClick={() => navigate(`/pathok/document/${activeDocument.id}/edit`)}>Edit</button></div>
       </div>
-      {document.kind === PATHOK_KIND.YOUTUBE && (
-        <div className="pathok-reader-controls">
-          <div className="pathok-pills"><button className={language === "BANGLA" ? "active" : ""} disabled={!document.content.trim()} onClick={() => setLanguage("BANGLA")}>বাংলা</button><button className={language === "ENGLISH" ? "active" : ""} disabled={!document.originalTranscript} onClick={() => setLanguage("ENGLISH")}>English</button></div>
-          {language === "ENGLISH" && <FormatToggle format={format} setFormat={setFormat} readable={Boolean(document.readableTranscript)} />}
-          <a href={document.youtubeUrl} target="_blank" rel="noreferrer">Watch video ↗</a>
+      {activeDocument.kind === PATHOK_KIND.YOUTUBE && (
+        <div className="pathok-reader-controls pathok-normal-reader-ui">
+          <LanguageToggle language={language} changeLanguage={changeLanguage} document={activeDocument} />
+          {language === "ENGLISH" && <FormatToggle format={format} setFormat={changeFormat} readable={Boolean(activeDocument.readableTranscript)} />}
+          <a href={activeDocument.youtubeUrl} target="_blank" rel="noreferrer">Watch video ↗</a>
         </div>
       )}
       {readingText ? (
-        <div className="pathok-reading-scroll" ref={scrollRef} onScroll={onScroll}>
+        <div className="pathok-reading-scroll" ref={scrollRef} onScroll={onScroll} onClick={revealToolbar}>
           <article lang={language === "BANGLA" ? "bn" : "en"}>{paragraphs.map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 20)}`} data-paragraph={index}>{paragraph}</p>)}</article>
         </div>
       ) : <div className="pathok-empty-reader"><h3>No reading text yet</h3><p>Edit this item to add বাংলা text or generate its transcript.</p></div>}
+      {focusMode && <div className="pathok-focus-progress" aria-label={`${Math.round(progress)} percent read`}><i style={{ width: `${progress}%` }} /><span>{Math.round(progress)}%</span></div>}
+      {(readerStatus || deferredContent) && <div className="pathok-reader-status" role="status">{deferredContent ? "Library updates will appear after focus mode." : readerStatus}</div>}
     </section>
   );
 }
 
+function LanguageToggle({ language, changeLanguage, document }) {
+  return <div className="pathok-pills" aria-label="Reading language"><button aria-pressed={language === "BANGLA"} className={language === "BANGLA" ? "active" : ""} disabled={!document.content.trim()} onClick={() => changeLanguage("BANGLA")}>বাংলা</button><button aria-pressed={language === "ENGLISH"} className={language === "ENGLISH" ? "active" : ""} disabled={!document.originalTranscript} onClick={() => changeLanguage("ENGLISH")}>English</button></div>;
+}
+
 function FormatToggle({ format, setFormat, readable }) {
-  return <div className="pathok-pills compact" aria-label="Transcript format"><button className={format === "READABLE" ? "active" : ""} disabled={!readable} onClick={() => setFormat("READABLE")}>Readable</button><button className={format === "COMPACT" ? "active" : ""} onClick={() => setFormat("COMPACT")}>Compact</button></div>;
+  return <div className="pathok-pills compact" aria-label="Transcript format"><button aria-pressed={format === "READABLE"} className={format === "READABLE" ? "active" : ""} disabled={!readable} onClick={() => setFormat("READABLE")}>Readable</button><button aria-pressed={format === "COMPACT"} className={format === "COMPACT" ? "active" : ""} onClick={() => setFormat("COMPACT")}>Compact</button></div>;
 }
 
 function CopyButton({ text }) {

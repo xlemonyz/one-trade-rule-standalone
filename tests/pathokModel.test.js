@@ -6,6 +6,12 @@ import {
   parseYouTubeVideoId,
   splitReadingText,
 } from "../src/lib/pathokModel.js";
+import {
+  changeReaderFontSize,
+  DEFAULT_READER_PREFERENCES,
+  normalizeReaderPreferences,
+  parseReaderPreferences,
+} from "../src/lib/pathokReaderPreferences.js";
 
 test("parses supported YouTube URL formats", () => {
   assert.equal(parseYouTubeVideoId("https://youtu.be/dQw4w9WgXcQ"), "dQw4w9WgXcQ");
@@ -39,4 +45,18 @@ test("filters deleted documents and searches title or content", () => {
 test("keeps explicit timestamp segments as readable paragraphs", () => {
   assert.deepEqual(splitReadingText("First caption\n\nSecond caption"), ["First caption", "Second caption"]);
   assert.deepEqual(splitReadingText("First sentence. Second sentence."), ["First sentence.", "Second sentence."]);
+});
+
+test("validates persisted reader preferences", () => {
+  assert.deepEqual(parseReaderPreferences("not-json"), DEFAULT_READER_PREFERENCES);
+  assert.deepEqual(normalizeReaderPreferences({ theme: "UNKNOWN", width: "WIDE", banglaFontSize: 80 }), {
+    theme: "PAPER", width: "WIDE", banglaFontSize: 30, englishFontSize: 18,
+  });
+});
+
+test("changes only the active language font size within limits", () => {
+  const larger = changeReaderFontSize(DEFAULT_READER_PREFERENCES, "ENGLISH", 2);
+  assert.equal(larger.englishFontSize, 20);
+  assert.equal(larger.banglaFontSize, 20);
+  assert.equal(changeReaderFontSize({ ...larger, englishFontSize: 30 }, "ENGLISH", 2).englishFontSize, 30);
 });
