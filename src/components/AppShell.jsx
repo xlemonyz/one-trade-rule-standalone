@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { to: "/one-trade-rule", label: "One Trade Rule" },
   { to: "/history", label: "History" },
   { to: "/mt5-sync", label: "MT5 Sync" },
+  { to: "/pathok", label: "পাঠক" },
   { to: "/settings", label: "Settings" },
 ];
 

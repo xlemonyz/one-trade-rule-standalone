@@ -1,0 +1,444 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  generatePathokTranscript,
+  getYouTubeMetadata,
+  loadPathokDocuments,
+  patchPathokDocument,
+  savePathokDocument,
+  softDeletePathokDocument,
+  subscribeToPathokDocuments,
+} from "../lib/pathokData.js";
+import {
+  filterPathokDocuments,
+  parseYouTubeVideoId,
+  PATHOK_KIND,
+  splitReadingText,
+  TRANSCRIPT_STATUS,
+} from "../lib/pathokModel.js";
+import "../styles/pathok.css";
+
+function makeDocument(kind) {
+  const now = Date.now();
+  return {
+    id: crypto.randomUUID(), kind, title: "", content: "", createdAt: now, updatedAt: now,
+    youtubeUrl: null, youtubeVideoId: null, thumbnailUrl: null, deletedAt: null,
+    scrollIndex: 0, scrollOffset: 0, transcriptScrollIndex: 0, transcriptScrollOffset: 0,
+    originalTranscript: null, readableTranscript: null, transcriptLanguage: null,
+    transcriptStatus: TRANSCRIPT_STATUS.NOT_GENERATED, transcriptError: null,
+  };
+}
+
+function usePathokLibrary(userId) {
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const dirtyRef = useRef(false);
+  const [remoteConflict, setRemoteConflict] = useState(false);
+
+  async function refresh({ silent = false } = {}) {
+    if (!userId) return;
+    if (!silent) setLoading(true);
+    try {
+      const rows = await loadPathokDocuments(userId);
+      setDocuments(rows);
+      setError("");
+    } catch (nextError) {
+      setError(nextError.message || "Could not load your Pathok library.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    loadPathokDocuments(userId)
+      .then((rows) => { if (active) setDocuments(rows); })
+      .catch((nextError) => { if (active) setError(nextError.message || "Could not load your Pathok library."); })
+      .finally(() => { if (active) setLoading(false); });
+    const unsubscribe = subscribeToPathokDocuments(userId, () => {
+      if (dirtyRef.current) setRemoteConflict(true);
+      else loadPathokDocuments(userId).then((rows) => { if (active) setDocuments(rows); }).catch(() => {});
+    });
+    const onFocus = () => {
+      if (!dirtyRef.current) loadPathokDocuments(userId).then((rows) => { if (active) setDocuments(rows); }).catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => { active = false; unsubscribe(); window.removeEventListener("focus", onFocus); };
+  }, [userId]);
+
+  function mergeDocument(document) {
+    setDocuments((current) => [document, ...current.filter((item) => item.id !== document.id)]);
+    return document;
+  }
+
+  async function save(document) {
+    const saved = await savePathokDocument(document, userId);
+    return mergeDocument(saved);
+  }
+
+  async function patch(documentId, fields) {
+    const saved = await patchPathokDocument(userId, documentId, fields);
+    return mergeDocument(saved);
+  }
+
+  async function remove(documentId) {
+    const deleted = await softDeletePathokDocument(userId, documentId);
+    mergeDocument(deleted);
+  }
+
+  function setDirty(value) {
+    dirtyRef.current = value;
+    if (!value) setRemoteConflict(false);
+  }
+
+  return { documents, loading, error, remoteConflict, refresh, save, patch, remove, setDirty };
+}
+
+export function PathokPage({ session }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const library = usePathokLibrary(session.user.id);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("ALL");
+  const [notice, setNotice] = useState("");
+  const isNew = location.pathname === "/pathok/new";
+  const isEdit = location.pathname.endsWith("/edit");
+  const selected = library.documents.find((document) => document.id === id && !document.deletedAt) || null;
+  const filtered = useMemo(
+    () => filterPathokDocuments(library.documents, query, filter),
+    [library.documents, query, filter],
+  );
+
+  async function deleteDocument(document) {
+    if (!window.confirm(`Delete “${document.title || "Untitled"}” from your synced library?`)) return;
+    await library.remove(document.id);
+    if (id === document.id) navigate("/pathok");
+  }
+
+  return (
+    <div className="pathok-root">
+      <header className="pathok-header">
+        <div>
+          <span className="pathok-eyebrow">YOUR READING SPACE</span>
+          <h1>পাঠক</h1>
+          <p>YouTube captions, বাংলা notes, one quiet library.</p>
+        </div>
+        <div className="pathok-header-actions">
+          <button className="pathok-ghost-btn" onClick={() => library.refresh()} disabled={library.loading}>Refresh</button>
+          <button className="pathok-primary-btn" onClick={() => navigate("/pathok/new")}>＋ Add</button>
+        </div>
+      </header>
+
+      {(library.error || notice) && (
+        <div className={`pathok-alert ${library.error ? "error" : "success"}`} role="status">
+          {library.error || notice}
+        </div>
+      )}
+      {library.remoteConflict && (
+        <div className="pathok-alert warning" role="alert">
+          This item changed on another device. Finish or cancel your edit, then refresh to review it.
+        </div>
+      )}
+
+      <div className={`pathok-workspace ${id || isNew ? "has-detail" : ""}`}>
+        <aside className="pathok-library" aria-label="Pathok library">
+          <div className="pathok-library-tools">
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your library…" />
+            <div className="pathok-pills" aria-label="Filter library">
+              {["ALL", PATHOK_KIND.YOUTUBE, PATHOK_KIND.TEXT].map((kind) => (
+                <button key={kind} className={filter === kind ? "active" : ""} onClick={() => setFilter(kind)}>
+                  {kind === "ALL" ? "All" : kind === PATHOK_KIND.YOUTUBE ? "YouTube" : "Text"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="pathok-library-list">
+            {library.loading ? <LibrarySkeleton /> : filtered.length ? filtered.map((document) => (
+              <LibraryCard
+                key={document.id}
+                document={document}
+                active={document.id === id}
+                onOpen={() => navigate(`/pathok/document/${document.id}`)}
+                onEdit={() => navigate(`/pathok/document/${document.id}/edit`)}
+                onDelete={() => deleteDocument(document)}
+              />
+            )) : <div className="pathok-empty-mini">No saved item matches this view.</div>}
+          </div>
+        </aside>
+
+        <main className="pathok-detail">
+          {(id || isNew) && <button className="pathok-mobile-back" onClick={() => navigate("/pathok")}>← Library</button>}
+          {isNew ? (
+            <NewDocumentChooser kind={searchParams.get("kind")} navigate={navigate} library={library} onNotice={setNotice} />
+          ) : isEdit && selected ? (
+            <PathokEditor
+              document={selected}
+              library={library}
+              navigate={navigate}
+              onNotice={setNotice}
+            />
+          ) : selected ? (
+            <PathokReader document={selected} onPatch={library.patch} navigate={navigate} onNotice={setNotice} />
+          ) : (
+            <PathokWelcome navigate={navigate} />
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function NewDocumentChooser({ kind, navigate, library, onNotice }) {
+  if (kind === "text" || kind === "youtube") {
+    return <PathokEditor key={kind} document={makeDocument(kind === "youtube" ? PATHOK_KIND.YOUTUBE : PATHOK_KIND.TEXT)} isNew navigate={navigate} library={library} onNotice={onNotice} />;
+  }
+  return (
+    <section className="pathok-welcome pathok-new-choice">
+      <span className="pathok-book-mark">＋</span>
+      <h2>What are we saving?</h2>
+      <p>Keep a clean note, or turn a captioned YouTube video into a focused reading session.</p>
+      <div className="pathok-choice-grid">
+        <button onClick={() => navigate("/pathok/new?kind=text")}><strong>Paste text</strong><span>Save বাংলা or English reading notes</span></button>
+        <button onClick={() => navigate("/pathok/new?kind=youtube")}><strong>Paste YouTube link</strong><span>Capture captions, thumbnail and title</span></button>
+      </div>
+    </section>
+  );
+}
+
+function LibraryCard({ document, active, onOpen, onEdit, onDelete }) {
+  const hasBangla = document.content.trim().length > 0;
+  return (
+    <article className={`pathok-library-card ${active ? "active" : ""}`}>
+      <button className="pathok-card-open" onClick={onOpen}>
+        {document.kind === PATHOK_KIND.YOUTUBE ? (
+          <img src={document.thumbnailUrl || `https://i.ytimg.com/vi/${document.youtubeVideoId}/hqdefault.jpg`} alt="" />
+        ) : <span className="pathok-note-glyph">Aa</span>}
+        <span className="pathok-card-copy">
+          <strong>{document.title || "Untitled"}</strong>
+          <small>{document.kind === PATHOK_KIND.YOUTUBE ? `${hasBangla ? "বাংলা ready" : "YouTube transcript"}` : "Text note"}</small>
+        </span>
+      </button>
+      <div className="pathok-card-actions">
+        <time>{new Date(document.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time>
+        <button onClick={onEdit} aria-label={`Edit ${document.title}`}>Edit</button>
+        <button onClick={onDelete} aria-label={`Delete ${document.title}`}>Delete</button>
+      </div>
+    </article>
+  );
+}
+
+function PathokEditor({ document, isNew = false, library, navigate, onNotice = () => {} }) {
+  const [title, setTitle] = useState(document.title);
+  const [content, setContent] = useState(document.content);
+  const [youtubeUrl, setYoutubeUrl] = useState(document.youtubeUrl || "");
+  const [workingDocument, setWorkingDocument] = useState(document);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [format, setFormat] = useState(document.readableTranscript ? "READABLE" : "COMPACT");
+  const isYoutube = document.kind === PATHOK_KIND.YOUTUBE;
+
+  useEffect(() => {
+    library?.setDirty(title !== document.title || content !== document.content || youtubeUrl !== (document.youtubeUrl || ""));
+    return () => library?.setDirty(false);
+  }, [title, content, youtubeUrl, document, library]);
+
+  async function saveText() {
+    if (!title.trim() || !content.trim() || !library) return;
+    setBusy(true); setError("");
+    try {
+      const saved = await library.save({ ...workingDocument, title: title.trim(), content: content.trim(), updatedAt: Date.now() });
+      library.setDirty(false); onNotice("Saved to your Pathok library."); navigate(`/pathok/document/${saved.id}`);
+    } catch (nextError) { setError(nextError.message || "Could not save this note."); }
+    finally { setBusy(false); }
+  }
+
+  async function loadVideo() {
+    if (!parseYouTubeVideoId(youtubeUrl) || !library) { setError("Paste a valid YouTube video link."); return; }
+    setBusy(true); setError("");
+    try {
+      const metadata = await getYouTubeMetadata(youtubeUrl);
+      const videoChanged = workingDocument.youtubeVideoId && workingDocument.youtubeVideoId !== metadata.videoId;
+      const next = {
+        ...workingDocument,
+        title: metadata.title,
+        youtubeUrl: metadata.canonicalUrl,
+        youtubeVideoId: metadata.videoId,
+        thumbnailUrl: metadata.thumbnailUrl,
+        content: videoChanged ? "" : content,
+        originalTranscript: videoChanged ? null : workingDocument.originalTranscript,
+        readableTranscript: videoChanged ? null : workingDocument.readableTranscript,
+        transcriptStatus: videoChanged ? TRANSCRIPT_STATUS.NOT_GENERATED : workingDocument.transcriptStatus,
+        transcriptError: null,
+        scrollIndex: videoChanged ? 0 : workingDocument.scrollIndex,
+        scrollOffset: videoChanged ? 0 : workingDocument.scrollOffset,
+        transcriptScrollIndex: videoChanged ? 0 : workingDocument.transcriptScrollIndex,
+        transcriptScrollOffset: videoChanged ? 0 : workingDocument.transcriptScrollOffset,
+        updatedAt: Date.now(),
+      };
+      const saved = await library.save(next);
+      setWorkingDocument(saved); setTitle(saved.title); setYoutubeUrl(saved.youtubeUrl); setContent(saved.content);
+      library.setDirty(false);
+      navigate(`/pathok/document/${saved.id}/edit`, { replace: true });
+      if (saved.transcriptStatus === TRANSCRIPT_STATUS.NOT_GENERATED || videoChanged) await requestTranscript(saved, false);
+    } catch (nextError) { setError(nextError.message || "Could not load this YouTube video."); }
+    finally { setBusy(false); }
+  }
+
+  async function requestTranscript(target = workingDocument, forceRefresh = false) {
+    if (!library || !target.youtubeUrl) return;
+    if (forceRefresh && !window.confirm("Regenerating may use 1 Supadata credit. Continue?")) return;
+    setBusy(true); setError("");
+    try {
+      await library.patch(target.id, { transcript_status: TRANSCRIPT_STATUS.REQUESTED, transcript_error: null, updated_at_ms: Date.now() });
+      const result = await generatePathokTranscript(target.youtubeUrl, forceRefresh);
+      const saved = await library.patch(target.id, {
+        original_transcript: result.transcript,
+        readable_transcript: result.readableTranscript || null,
+        transcript_language: result.language || "und",
+        transcript_status: TRANSCRIPT_STATUS.READY,
+        transcript_error: null,
+        updated_at_ms: Date.now(),
+      });
+      setWorkingDocument(saved); setFormat(saved.readableTranscript ? "READABLE" : "COMPACT");
+    } catch (nextError) {
+      const message = nextError.message || "Transcript is unavailable.";
+      await library.patch(target.id, { transcript_status: TRANSCRIPT_STATUS.FAILED, transcript_error: message, updated_at_ms: Date.now() }).catch(() => {});
+      setError(message);
+    } finally { setBusy(false); }
+  }
+
+  async function saveBangla() {
+    if (!library || !content.trim()) return;
+    setBusy(true); setError("");
+    try {
+      const saved = await library.patch(workingDocument.id, { content: content.trim(), updated_at_ms: Date.now() });
+      library.setDirty(false); onNotice("বাংলা text saved."); navigate(`/pathok/document/${saved.id}`);
+    } catch (nextError) { setError(nextError.message || "Could not save বাংলা text."); }
+    finally { setBusy(false); }
+  }
+
+  if (!library) return null;
+  const transcript = format === "READABLE" ? workingDocument.readableTranscript : workingDocument.originalTranscript;
+  return (
+    <section className="pathok-editor">
+      <div className="pathok-section-heading">
+        <span>{isYoutube ? "YOUTUBE READING" : "TEXT NOTE"}</span>
+        <h2>{isNew ? (isYoutube ? "Paste a YouTube link" : "Create a reading note") : `Edit ${isYoutube ? "YouTube item" : "note"}`}</h2>
+      </div>
+      {error && <div className="pathok-alert error" role="alert">{error}</div>}
+      {!isYoutube ? (
+        <div className="pathok-form-stack">
+          <label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="A clear title" /></label>
+          <label>Reading text<textarea value={content} onChange={(event) => setContent(event.target.value)} rows="18" placeholder="Paste বাংলা or English text…" /></label>
+          <div className="pathok-form-actions"><button className="pathok-ghost-btn" onClick={() => navigate(-1)}>Cancel</button><button className="pathok-primary-btn" disabled={busy || !title.trim() || !content.trim()} onClick={saveText}>{busy ? "Saving…" : "Save note"}</button></div>
+        </div>
+      ) : (
+        <div className="pathok-form-stack">
+          <label>YouTube link<div className="pathok-inline-field"><input value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="https://youtu.be/…" /><button disabled={busy || !parseYouTubeVideoId(youtubeUrl)} onClick={loadVideo}>{busy ? "Loading…" : "Load video"}</button></div></label>
+          {workingDocument.youtubeVideoId && (
+            <>
+              <div className="pathok-video-preview"><img src={workingDocument.thumbnailUrl} alt="" /><div><span>YOUTUBE VIDEO</span><h3>{workingDocument.title}</h3><a href={workingDocument.youtubeUrl} target="_blank" rel="noreferrer">Open video ↗</a></div></div>
+              {workingDocument.transcriptStatus === TRANSCRIPT_STATUS.REQUESTED && <div className="pathok-transcript-loading"><i /><span>Generating timestamp-free captions…</span></div>}
+              {workingDocument.originalTranscript && (
+                <div className="pathok-transcript-box">
+                  <div className="pathok-panel-title"><h3>Original transcript</h3><FormatToggle format={format} setFormat={setFormat} readable={Boolean(workingDocument.readableTranscript)} /></div>
+                  <div className="pathok-transcript-preview">{transcript}</div>
+                  <div className="pathok-form-actions"><CopyButton text={transcript} /><button className="pathok-ghost-btn" onClick={() => requestTranscript(workingDocument, true)}>Force regenerate · 1 credit</button></div>
+                </div>
+              )}
+              {workingDocument.transcriptStatus === TRANSCRIPT_STATUS.FAILED && <button className="pathok-ghost-btn" onClick={() => requestTranscript(workingDocument, false)}>Retry transcript</button>}
+              <label>বাংলা text<textarea value={content} onChange={(event) => setContent(event.target.value)} rows="12" placeholder="বাংলা অনুবাদ এখানে পেস্ট করুন…" /></label>
+              <div className="pathok-form-actions"><button className="pathok-ghost-btn" onClick={() => navigate(`/pathok/document/${workingDocument.id}`)}>Cancel</button><button className="pathok-primary-btn" disabled={busy || !content.trim()} onClick={saveBangla}>{busy ? "Saving…" : "Save বাংলা text"}</button></div>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PathokReader({ document, onPatch, navigate, onNotice }) {
+  const [language, setLanguage] = useState(document.content.trim() ? "BANGLA" : "ENGLISH");
+  const [format, setFormat] = useState(document.readableTranscript ? "READABLE" : "COMPACT");
+  const scrollRef = useRef(null);
+  const timerRef = useRef(null);
+  const english = format === "READABLE" && document.readableTranscript ? document.readableTranscript : document.originalTranscript || "";
+  const readingText = language === "BANGLA" ? document.content : english;
+  const paragraphs = useMemo(() => splitReadingText(readingText), [readingText]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    const index = language === "BANGLA" ? document.scrollIndex : document.transcriptScrollIndex;
+    const offset = language === "BANGLA" ? document.scrollOffset : document.transcriptScrollOffset;
+    const target = container?.querySelector(`[data-paragraph="${index}"]`);
+    if (container && target) container.scrollTop = target.offsetTop - container.offsetTop + offset;
+    // Progress updates must not retrigger restoration while the user is scrolling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document.id, language, format]);
+
+  function saveProgress() {
+    const container = scrollRef.current;
+    if (!container) return;
+    const blocks = [...container.querySelectorAll("[data-paragraph]")];
+    const first = blocks.find((block) => block.offsetTop + block.offsetHeight > container.scrollTop + container.offsetTop) || blocks.at(-1);
+    if (!first) return;
+    const index = Number(first.dataset.paragraph);
+    const offset = Math.max(0, container.scrollTop + container.offsetTop - first.offsetTop);
+    const fields = language === "BANGLA"
+      ? { scroll_index: index, scroll_offset: offset }
+      : { transcript_scroll_index: index, transcript_scroll_offset: offset };
+    onPatch(document.id, { ...fields, updated_at_ms: Date.now() }).catch(() => {});
+  }
+
+  function onScroll() {
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(saveProgress, 700);
+  }
+
+  async function copyText() {
+    await navigator.clipboard.writeText(readingText);
+    onNotice(`${language === "BANGLA" ? "বাংলা text" : "Transcript"} copied.`);
+  }
+
+  return (
+    <section className="pathok-reader">
+      <div className="pathok-reader-top">
+        <div><span>{document.kind === PATHOK_KIND.YOUTUBE ? "YOUTUBE READING" : "SAVED NOTE"}</span><h2>{document.title}</h2></div>
+        <div className="pathok-reader-actions"><button className="pathok-ghost-btn" onClick={copyText}>Copy</button><button className="pathok-ghost-btn" onClick={() => navigate(`/pathok/document/${document.id}/edit`)}>Edit</button></div>
+      </div>
+      {document.kind === PATHOK_KIND.YOUTUBE && (
+        <div className="pathok-reader-controls">
+          <div className="pathok-pills"><button className={language === "BANGLA" ? "active" : ""} disabled={!document.content.trim()} onClick={() => setLanguage("BANGLA")}>বাংলা</button><button className={language === "ENGLISH" ? "active" : ""} disabled={!document.originalTranscript} onClick={() => setLanguage("ENGLISH")}>English</button></div>
+          {language === "ENGLISH" && <FormatToggle format={format} setFormat={setFormat} readable={Boolean(document.readableTranscript)} />}
+          <a href={document.youtubeUrl} target="_blank" rel="noreferrer">Watch video ↗</a>
+        </div>
+      )}
+      {readingText ? (
+        <div className="pathok-reading-scroll" ref={scrollRef} onScroll={onScroll}>
+          <article lang={language === "BANGLA" ? "bn" : "en"}>{paragraphs.map((paragraph, index) => <p key={`${index}-${paragraph.slice(0, 20)}`} data-paragraph={index}>{paragraph}</p>)}</article>
+        </div>
+      ) : <div className="pathok-empty-reader"><h3>No reading text yet</h3><p>Edit this item to add বাংলা text or generate its transcript.</p></div>}
+    </section>
+  );
+}
+
+function FormatToggle({ format, setFormat, readable }) {
+  return <div className="pathok-pills compact" aria-label="Transcript format"><button className={format === "READABLE" ? "active" : ""} disabled={!readable} onClick={() => setFormat("READABLE")}>Readable</button><button className={format === "COMPACT" ? "active" : ""} onClick={() => setFormat("COMPACT")}>Compact</button></div>;
+}
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() { await navigator.clipboard.writeText(text || ""); setCopied(true); window.setTimeout(() => setCopied(false), 1600); }
+  return <button className="pathok-primary-btn" disabled={!text} onClick={copy}>{copied ? "Copied" : "Copy transcript"}</button>;
+}
+
+function PathokWelcome({ navigate }) {
+  return <section className="pathok-welcome"><span className="pathok-book-mark">◉</span><h2>Your quiet reading desk</h2><p>Select something from your library, or bring in a text note or captioned YouTube video.</p><button className="pathok-primary-btn" onClick={() => navigate("/pathok/new")}>Add your first item</button></section>;
+}
+
+function LibrarySkeleton() {
+  return <>{[1, 2, 3].map((item) => <div className="pathok-skeleton" key={item}><i /><span /></div>)}</>;
+}

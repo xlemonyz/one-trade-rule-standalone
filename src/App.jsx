@@ -22,6 +22,7 @@ import { HistoryPage } from "./pages/HistoryPage.jsx";
 import { MT5SyncPage } from "./pages/MT5SyncPage.jsx";
 import { SettingsPage } from "./pages/SettingsPage.jsx";
 import { PathokConnectPage } from "./pages/PathokConnectPage.jsx";
+import { PathokPage } from "./pages/PathokPage.jsx";
 
 function buildEvaluatedRule(rawRule, trades) {
   return evaluateDisciplineState(
@@ -168,7 +169,7 @@ export default function App() {
         setSuccess("");
       }}
     >
-      {loading ? (
+      {loading && !location.pathname.startsWith("/pathok") ? (
         <div className="center-screen">Loading One Trade Rule workspace...</div>
       ) : (
         <Routes>
@@ -199,6 +200,10 @@ export default function App() {
             }
           />
           <Route path="/settings" element={<SettingsPage user={session.user} />} />
+          <Route path="/pathok" element={<PathokPage session={session} />} />
+          <Route path="/pathok/new" element={<PathokPage session={session} />} />
+          <Route path="/pathok/document/:id" element={<PathokPage session={session} />} />
+          <Route path="/pathok/document/:id/edit" element={<PathokPage session={session} />} />
           <Route path="*" element={<Navigate to="/one-trade-rule" replace />} />
         </Routes>
       )}
