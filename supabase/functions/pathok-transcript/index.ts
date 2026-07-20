@@ -69,6 +69,7 @@ Deno.serve(async (request) => {
     providerUrl.searchParams.set("url", videoUrl);
     providerUrl.searchParams.set("text", "true");
     providerUrl.searchParams.set("mode", "native");
+    providerUrl.searchParams.set("lang", "en");
     const provider = await fetch(providerUrl, { headers: { "x-api-key": apiKey } });
     const payload = await provider.json().catch(() => ({})) as Record<string, unknown>;
     if (!provider.ok) {
