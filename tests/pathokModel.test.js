@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  compactTranscript,
   filterPathokDocuments,
+  normalizeReadableTranscript,
   normalizePathokDocument,
   parseYouTubeVideoId,
   splitReadingText,
@@ -45,6 +47,12 @@ test("filters deleted documents and searches title or content", () => {
 test("keeps explicit timestamp segments as readable paragraphs", () => {
   assert.deepEqual(splitReadingText("First caption\n\nSecond caption"), ["First caption", "Second caption"]);
   assert.deepEqual(splitReadingText("First sentence. Second sentence."), ["First sentence.", "Second sentence."]);
+});
+
+test("creates readable and compact forms from a manual transcript", () => {
+  const readable = normalizeReadableTranscript(" First segment \r\n\r\n\r\n Second   segment \n final line ");
+  assert.equal(readable, "First segment\n\nSecond   segment\nfinal line");
+  assert.equal(compactTranscript(readable), "First segment Second segment final line");
 });
 
 test("validates persisted reader preferences", () => {

@@ -82,6 +82,20 @@ export function splitReadingText(value) {
   return text.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g)?.map((part) => part.trim()).filter(Boolean) || [text];
 }
 
+export function normalizeReadableTranscript(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function compactTranscript(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 export function filterPathokDocuments(documents, query, kind = "ALL") {
   const needle = String(query || "").trim().toLocaleLowerCase();
   return documents

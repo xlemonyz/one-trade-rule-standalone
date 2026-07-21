@@ -25,6 +25,7 @@
 .pathok-header p { margin: 9px 0 0; color: var(--pathok-muted); font-family: "Literata", serif; font-size: 13px; }
 .pathok-eyebrow, .pathok-section-heading > span, .pathok-reader-top > div > span, .pathok-video-preview span { color: var(--pathok-accent); font: 700 10px/1.2 var(--font-mono); letter-spacing: .14em; }
 .pathok-header-actions, .pathok-form-actions, .pathok-reader-actions { display: flex; gap: 9px; align-items: center; }
+.pathok-action-note { color: var(--pathok-muted); font-size: 12px; line-height: 1.45; }
 .pathok-root .pathok-primary-btn { background: var(--pathok-accent); border-color: var(--pathok-accent); color: #fffaf0; }
 .pathok-root .pathok-primary-btn:hover:not(:disabled) { background: var(--pathok-accent-dark); border-color: var(--pathok-accent-dark); }
 .pathok-root .pathok-ghost-btn { background: rgba(255, 253, 247, .78); color: #51493e; border-color: var(--pathok-line); }

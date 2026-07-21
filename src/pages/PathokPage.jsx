@@ -10,7 +10,9 @@ import {
   subscribeToPathokDocuments,
 } from "../lib/pathokData.js";
 import {
+  compactTranscript,
   filterPathokDocuments,
+  normalizeReadableTranscript,
   parseYouTubeVideoId,
   PATHOK_KIND,
   splitReadingText,
@@ -243,12 +245,20 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [format, setFormat] = useState(document.readableTranscript ? "READABLE" : "COMPACT");
+  const [manualTranscript, setManualTranscript] = useState(document.readableTranscript || document.originalTranscript || "");
+  const [manualTranscriptDirty, setManualTranscriptDirty] = useState(false);
+  const [transcriptBusy, setTranscriptBusy] = useState(false);
   const isYoutube = document.kind === PATHOK_KIND.YOUTUBE;
 
   useEffect(() => {
-    library?.setDirty(title !== document.title || content !== document.content || youtubeUrl !== (document.youtubeUrl || ""));
+    library?.setDirty(
+      title !== document.title
+      || content !== document.content
+      || youtubeUrl !== (document.youtubeUrl || "")
+      || manualTranscriptDirty,
+    );
     return () => library?.setDirty(false);
-  }, [title, content, youtubeUrl, document, library]);
+  }, [title, content, youtubeUrl, manualTranscriptDirty, document, library]);
 
   async function saveText() {
     if (!title.trim() || !content.trim() || !library) return;
@@ -285,9 +295,9 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
       };
       const saved = await library.save(next);
       setWorkingDocument(saved); setTitle(saved.title); setYoutubeUrl(saved.youtubeUrl); setContent(saved.content);
+      if (videoChanged) { setManualTranscript(""); setManualTranscriptDirty(false); }
       library.setDirty(false);
       navigate(`/pathok/document/${saved.id}/edit`, { replace: true });
-      if (saved.transcriptStatus === TRANSCRIPT_STATUS.NOT_GENERATED || videoChanged) await requestTranscript(saved, false);
     } catch (nextError) { setError(nextError.message || "Could not load this YouTube video."); }
     finally { setBusy(false); }
   }
@@ -295,9 +305,10 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
   async function requestTranscript(target = workingDocument, forceRefresh = false) {
     if (!library || !target.youtubeUrl) return;
     if (forceRefresh && !window.confirm("Regenerating may use 1 Supadata credit. Continue?")) return;
-    setBusy(true); setError("");
+    setTranscriptBusy(true); setError("");
     try {
-      await library.patch(target.id, { transcript_status: TRANSCRIPT_STATUS.REQUESTED, transcript_error: null, updated_at_ms: Date.now() });
+      const requested = await library.patch(target.id, { transcript_status: TRANSCRIPT_STATUS.REQUESTED, transcript_error: null, updated_at_ms: Date.now() });
+      setWorkingDocument(requested);
       const result = await generatePathokTranscript(target.youtubeUrl, forceRefresh);
       const saved = await library.patch(target.id, {
         original_transcript: result.transcript,
@@ -307,12 +318,40 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
         transcript_error: null,
         updated_at_ms: Date.now(),
       });
-      setWorkingDocument(saved); setFormat(saved.readableTranscript ? "READABLE" : "COMPACT");
+      setWorkingDocument(saved);
+      setManualTranscript(saved.readableTranscript || saved.originalTranscript || "");
+      setManualTranscriptDirty(false);
+      setFormat(saved.readableTranscript ? "READABLE" : "COMPACT");
     } catch (nextError) {
       const message = nextError.message || "Transcript is unavailable.";
-      await library.patch(target.id, { transcript_status: TRANSCRIPT_STATUS.FAILED, transcript_error: message, updated_at_ms: Date.now() }).catch(() => {});
+      const failed = await library.patch(target.id, { transcript_status: TRANSCRIPT_STATUS.FAILED, transcript_error: message, updated_at_ms: Date.now() }).catch(() => null);
+      if (failed) setWorkingDocument(failed);
       setError(message);
-    } finally { setBusy(false); }
+    } finally { setTranscriptBusy(false); }
+  }
+
+  async function saveManualTranscript() {
+    const readable = normalizeReadableTranscript(manualTranscript);
+    if (!library || !readable || !workingDocument.id) return;
+    setBusy(true); setError("");
+    try {
+      const saved = await library.patch(workingDocument.id, {
+        original_transcript: compactTranscript(readable),
+        readable_transcript: readable,
+        transcript_language: "en",
+        transcript_status: TRANSCRIPT_STATUS.READY,
+        transcript_error: null,
+        updated_at_ms: Date.now(),
+      });
+      setWorkingDocument(saved);
+      setManualTranscript(saved.readableTranscript || saved.originalTranscript || "");
+      setManualTranscriptDirty(false);
+      setFormat("READABLE");
+      library.setDirty(false);
+      onNotice("English transcript saved.");
+      navigate(`/pathok/document/${saved.id}`);
+    } catch (nextError) { setError(nextError.message || "Could not save the English transcript."); }
+    finally { setBusy(false); }
   }
 
   async function saveBangla() {
@@ -333,7 +372,7 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
         <span>{isYoutube ? "YOUTUBE READING" : "TEXT NOTE"}</span>
         <h2>{isNew ? (isYoutube ? "Paste a YouTube link" : "Create a reading note") : `Edit ${isYoutube ? "YouTube item" : "note"}`}</h2>
       </div>
-      {error && <div className="pathok-alert error" role="alert">{error}</div>}
+      {error && error !== workingDocument.transcriptError && <div className="pathok-alert error" role="alert">{error}</div>}
       {!isYoutube ? (
         <div className="pathok-form-stack">
           <label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="A clear title" /></label>
@@ -346,15 +385,29 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
           {workingDocument.youtubeVideoId && (
             <>
               <div className="pathok-video-preview"><img src={workingDocument.thumbnailUrl} alt="" /><div><span>YOUTUBE VIDEO</span><h3>{workingDocument.title}</h3><a href={workingDocument.youtubeUrl} target="_blank" rel="noreferrer">Open video ↗</a></div></div>
+              <div className="pathok-form-actions">
+                <button
+                  className="pathok-primary-btn"
+                  disabled={transcriptBusy}
+                  onClick={() => requestTranscript(workingDocument, Boolean(workingDocument.originalTranscript))}
+                >
+                  {transcriptBusy
+                    ? "Generating…"
+                    : workingDocument.originalTranscript ? "Regenerate transcript" : workingDocument.transcriptStatus === TRANSCRIPT_STATUS.FAILED ? "Retry transcript" : "Generate transcript"}
+                </button>
+                <span className="pathok-action-note">Generation starts only when you click the button.</span>
+              </div>
               {workingDocument.transcriptStatus === TRANSCRIPT_STATUS.REQUESTED && <div className="pathok-transcript-loading"><i /><span>Generating timestamp-free captions…</span></div>}
-              {workingDocument.originalTranscript && (
+              {workingDocument.transcriptStatus === TRANSCRIPT_STATUS.FAILED && workingDocument.transcriptError && <div className="pathok-alert error" role="alert">{workingDocument.transcriptError}</div>}
+              <label>English transcript<textarea value={manualTranscript} onChange={(event) => { setManualTranscript(event.target.value); setManualTranscriptDirty(true); }} rows="14" placeholder="Paste an English transcript here, or generate one above…" /></label>
+              {workingDocument.originalTranscript && !manualTranscriptDirty && (
                 <div className="pathok-transcript-box">
-                  <div className="pathok-panel-title"><h3>Original transcript</h3><FormatToggle format={format} setFormat={setFormat} readable={Boolean(workingDocument.readableTranscript)} /></div>
+                  <div className="pathok-panel-title"><h3>Saved transcript</h3><FormatToggle format={format} setFormat={setFormat} readable={Boolean(workingDocument.readableTranscript)} /></div>
                   <div className="pathok-transcript-preview">{transcript}</div>
-                  <div className="pathok-form-actions"><CopyButton text={transcript} /><button className="pathok-ghost-btn" onClick={() => requestTranscript(workingDocument, true)}>Force regenerate · 1 credit</button></div>
+                  <div className="pathok-form-actions"><CopyButton text={transcript} /></div>
                 </div>
               )}
-              {workingDocument.transcriptStatus === TRANSCRIPT_STATUS.FAILED && <button className="pathok-ghost-btn" onClick={() => requestTranscript(workingDocument, false)}>Retry transcript</button>}
+              <div className="pathok-form-actions"><button className="pathok-primary-btn" disabled={busy || transcriptBusy || !manualTranscript.trim()} onClick={saveManualTranscript}>{busy ? "Saving…" : "Save English transcript"}</button></div>
               <label>বাংলা text<textarea value={content} onChange={(event) => setContent(event.target.value)} rows="12" placeholder="বাংলা অনুবাদ এখানে পেস্ট করুন…" /></label>
               <div className="pathok-form-actions"><button className="pathok-ghost-btn" onClick={() => navigate(`/pathok/document/${workingDocument.id}`)}>Cancel</button><button className="pathok-primary-btn" disabled={busy || !content.trim()} onClick={saveBangla}>{busy ? "Saving…" : "Save বাংলা text"}</button></div>
             </>
