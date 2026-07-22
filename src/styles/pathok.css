@@ -54,6 +54,12 @@
 .pathok-card-copy { min-width: 0; display: grid; align-content: center; gap: 4px; }
 .pathok-card-copy strong { font-size: 14px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .pathok-card-copy small { color: var(--pathok-muted); font-size: 11px; }
+.pathok-card-progress-list { display: grid; gap: 5px; padding: 0 10px 7px; }
+.pathok-card-progress { display: grid; grid-template-columns: 48px minmax(0, 1fr) 58px; align-items: center; gap: 7px; color: var(--pathok-muted); font-size: 10px; }
+.pathok-card-progress > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pathok-card-progress > i { height: 4px; overflow: hidden; border-radius: 999px; background: #dfd3c1; }
+.pathok-card-progress > i > b { display: block; height: 100%; border-radius: inherit; background: var(--pathok-accent); }
+.pathok-card-progress > small { text-align: right; color: var(--pathok-muted); font-size: 9px; }
 .pathok-card-actions { display: flex; align-items: center; gap: 5px; padding: 0 10px 8px; }
 .pathok-card-actions time { margin-right: auto; color: #9a8f7d; font-size: 10px; }
 .pathok-card-actions button { width: auto; padding: 3px 7px; border: 0; background: transparent; color: var(--pathok-muted); font-size: 10px; }

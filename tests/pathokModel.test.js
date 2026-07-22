@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   compactTranscript,
   filterPathokDocuments,
+  getDocumentProgress,
   normalizeReadableTranscript,
   normalizePathokDocument,
   parseYouTubeVideoId,
@@ -27,11 +28,20 @@ test("normalizes Android-compatible transcript and progress fields", () => {
     id: "doc", kind: "YOUTUBE", title: "Video", content: "বাংলা",
     readable_transcript: "First\n\nSecond", original_transcript: "First Second",
     transcript_status: "READY", scroll_index: 2, transcript_scroll_offset: 90,
+    reading_progress_percent: 42, transcript_progress_percent: 99,
   });
   assert.equal(document.readableTranscript, "First\n\nSecond");
   assert.equal(document.originalTranscript, "First Second");
   assert.equal(document.scrollIndex, 2);
   assert.equal(document.transcriptScrollOffset, 90);
+  assert.equal(document.readingProgressPercent, 42);
+  assert.equal(document.transcriptProgressPercent, 100);
+});
+
+test("uses saved progress and falls back to paragraph position for older documents", () => {
+  assert.equal(getDocumentProgress({ content: "One. Two. Three.", scrollIndex: 1, readingProgressPercent: null }), 50);
+  assert.equal(getDocumentProgress({ content: "One.", scrollIndex: 0, readingProgressPercent: 61 }), 61);
+  assert.equal(getDocumentProgress({ readableTranscript: "A. B. C.", transcriptScrollIndex: 2, transcriptProgressPercent: null }, "ENGLISH"), 100);
 });
 
 test("filters deleted documents and searches title or content", () => {

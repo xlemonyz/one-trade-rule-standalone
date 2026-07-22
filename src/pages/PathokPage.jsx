@@ -12,6 +12,7 @@ import {
 import {
   compactTranscript,
   filterPathokDocuments,
+  getDocumentProgress,
   normalizeReadableTranscript,
   parseYouTubeVideoId,
   PATHOK_KIND,
@@ -217,6 +218,7 @@ function NewDocumentChooser({ kind, navigate, library, onNotice }) {
 
 function LibraryCard({ document, active, onOpen, onEdit, onDelete }) {
   const hasBangla = document.content.trim().length > 0;
+  const hasEnglish = Boolean(document.originalTranscript);
   return (
     <article className={`pathok-library-card ${active ? "active" : ""}`}>
       <button className="pathok-card-open" onClick={onOpen}>
@@ -228,6 +230,11 @@ function LibraryCard({ document, active, onOpen, onEdit, onDelete }) {
           <small>{document.kind === PATHOK_KIND.YOUTUBE ? `${hasBangla ? "বাংলা ready" : "YouTube transcript"}` : "Text note"}</small>
         </span>
       </button>
+      <div className="pathok-card-progress-list">
+        {document.kind === PATHOK_KIND.TEXT && <CardProgress label="Read" value={getDocumentProgress(document)} />}
+        {document.kind === PATHOK_KIND.YOUTUBE && hasBangla && <CardProgress label="বাংলা" value={getDocumentProgress(document)} />}
+        {document.kind === PATHOK_KIND.YOUTUBE && hasEnglish && <CardProgress label="English" value={getDocumentProgress(document, "ENGLISH")} />}
+      </div>
       <div className="pathok-card-actions">
         <time>{new Date(document.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time>
         <button onClick={onEdit} aria-label={`Edit ${document.title}`}>Edit</button>
@@ -235,6 +242,12 @@ function LibraryCard({ document, active, onOpen, onEdit, onDelete }) {
       </div>
     </article>
   );
+}
+
+function CardProgress({ label, value }) {
+  const complete = value >= 100;
+  const status = complete ? "Completed" : value > 0 ? `${value}%` : "Not started";
+  return <div className="pathok-card-progress"><span>{label}</span><i><b style={{ width: `${value}%` }} /></i><small>{status}</small></div>;
 }
 
 function PathokEditor({ document, isNew = false, library, navigate, onNotice = () => {} }) {
@@ -264,7 +277,16 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
     if (!title.trim() || !content.trim() || !library) return;
     setBusy(true); setError("");
     try {
-      const saved = await library.save({ ...workingDocument, title: title.trim(), content: content.trim(), updatedAt: Date.now() });
+      const contentChanged = content.trim() !== workingDocument.content;
+      const saved = await library.save({
+        ...workingDocument,
+        title: title.trim(),
+        content: content.trim(),
+        scrollIndex: contentChanged ? 0 : workingDocument.scrollIndex,
+        scrollOffset: contentChanged ? 0 : workingDocument.scrollOffset,
+        readingProgressPercent: contentChanged ? null : workingDocument.readingProgressPercent,
+        updatedAt: Date.now(),
+      });
       library.setDirty(false); onNotice("Saved to your Pathok library."); navigate(`/pathok/document/${saved.id}`);
     } catch (nextError) { setError(nextError.message || "Could not save this note."); }
     finally { setBusy(false); }
@@ -291,6 +313,8 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
         scrollOffset: videoChanged ? 0 : workingDocument.scrollOffset,
         transcriptScrollIndex: videoChanged ? 0 : workingDocument.transcriptScrollIndex,
         transcriptScrollOffset: videoChanged ? 0 : workingDocument.transcriptScrollOffset,
+        readingProgressPercent: videoChanged ? null : workingDocument.readingProgressPercent,
+        transcriptProgressPercent: videoChanged ? null : workingDocument.transcriptProgressPercent,
         updatedAt: Date.now(),
       };
       const saved = await library.save(next);
@@ -316,6 +340,9 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
         transcript_language: result.language || "und",
         transcript_status: TRANSCRIPT_STATUS.READY,
         transcript_error: null,
+        transcript_scroll_index: 0,
+        transcript_scroll_offset: 0,
+        transcript_progress_percent: null,
         updated_at_ms: Date.now(),
       });
       setWorkingDocument(saved);
@@ -341,6 +368,9 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
         transcript_language: "en",
         transcript_status: TRANSCRIPT_STATUS.READY,
         transcript_error: null,
+        transcript_scroll_index: 0,
+        transcript_scroll_offset: 0,
+        transcript_progress_percent: null,
         updated_at_ms: Date.now(),
       });
       setWorkingDocument(saved);
@@ -358,7 +388,12 @@ function PathokEditor({ document, isNew = false, library, navigate, onNotice = (
     if (!library || !content.trim()) return;
     setBusy(true); setError("");
     try {
-      const saved = await library.patch(workingDocument.id, { content: content.trim(), updated_at_ms: Date.now() });
+      const contentChanged = content.trim() !== workingDocument.content;
+      const saved = await library.patch(workingDocument.id, {
+        content: content.trim(),
+        ...(contentChanged ? { scroll_index: 0, scroll_offset: 0, reading_progress_percent: null } : {}),
+        updated_at_ms: Date.now(),
+      });
       library.setDirty(false); onNotice("বাংলা text saved."); navigate(`/pathok/document/${saved.id}`);
     } catch (nextError) { setError(nextError.message || "Could not save বাংলা text."); }
     finally { setBusy(false); }
@@ -477,9 +512,12 @@ function PathokReader({ document, onPatch, navigate, onNotice }) {
     if (!first) return;
     const index = Number(first.dataset.paragraph);
     const offset = Math.max(0, container.scrollTop + container.offsetTop - first.offsetTop);
+    const maximum = Math.max(1, container.scrollHeight - container.clientHeight);
+    const rawProgress = Math.min(100, Math.max(0, (container.scrollTop / maximum) * 100));
+    const percentage = rawProgress >= 98 || container.scrollTop >= maximum - 2 ? 100 : Math.round(rawProgress);
     const fields = language === "BANGLA"
-      ? { scroll_index: index, scroll_offset: offset }
-      : { transcript_scroll_index: index, transcript_scroll_offset: offset };
+      ? { scroll_index: index, scroll_offset: offset, reading_progress_percent: percentage }
+      : { transcript_scroll_index: index, transcript_scroll_offset: offset, transcript_progress_percent: percentage };
     onPatch(activeDocument.id, { ...fields, updated_at_ms: Date.now() }).catch(() => {});
   }
 
@@ -569,8 +607,13 @@ function PathokReader({ document, onPatch, navigate, onNotice }) {
   useEffect(() => {
     const flush = () => saveProgress();
     window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+    const onVisibilityChange = () => { if (globalThis.document.visibilityState === "hidden") flush(); };
+    globalThis.document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", flush);
+      globalThis.document.removeEventListener("visibilitychange", onVisibilityChange);
       window.clearTimeout(timerRef.current);
       window.clearTimeout(hideTimerRef.current);
     };

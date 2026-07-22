@@ -21,6 +21,7 @@ export function normalizePathokDocument(row = {}) {
     updatedAt: Number(row.updated_at_ms) || Date.now(),
     scrollIndex: Math.max(0, Number(row.scroll_index) || 0),
     scrollOffset: Math.max(0, Number(row.scroll_offset) || 0),
+    readingProgressPercent: normalizeProgressPercent(row.reading_progress_percent),
     deletedAt: row.deleted_at_ms == null ? null : Number(row.deleted_at_ms),
     originalTranscript: row.original_transcript || null,
     readableTranscript: row.readable_transcript || null,
@@ -31,6 +32,7 @@ export function normalizePathokDocument(row = {}) {
     transcriptError: row.transcript_error || null,
     transcriptScrollIndex: Math.max(0, Number(row.transcript_scroll_index) || 0),
     transcriptScrollOffset: Math.max(0, Number(row.transcript_scroll_offset) || 0),
+    transcriptProgressPercent: normalizeProgressPercent(row.transcript_progress_percent),
   };
 }
 
@@ -48,6 +50,7 @@ export function toPathokRow(document, userId) {
     updated_at_ms: document.updatedAt,
     scroll_index: document.scrollIndex || 0,
     scroll_offset: document.scrollOffset || 0,
+    reading_progress_percent: normalizeProgressPercent(document.readingProgressPercent),
     deleted_at_ms: document.deletedAt ?? null,
     original_transcript: document.originalTranscript || null,
     readable_transcript: document.readableTranscript || null,
@@ -56,8 +59,28 @@ export function toPathokRow(document, userId) {
     transcript_job_id: null,
     transcript_scroll_index: document.transcriptScrollIndex || 0,
     transcript_scroll_offset: document.transcriptScrollOffset || 0,
+    transcript_progress_percent: normalizeProgressPercent(document.transcriptProgressPercent),
     transcript_error: document.transcriptError || null,
   };
+}
+
+export function normalizeProgressPercent(value) {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  const rounded = Math.round(number);
+  return rounded >= 98 ? 100 : Math.min(100, Math.max(0, rounded));
+}
+
+export function getDocumentProgress(document, language = "BANGLA") {
+  const english = language === "ENGLISH";
+  const stored = english ? document.transcriptProgressPercent : document.readingProgressPercent;
+  if (stored != null) return normalizeProgressPercent(stored) ?? 0;
+  const text = english ? (document.readableTranscript || document.originalTranscript) : document.content;
+  const paragraphs = splitReadingText(text);
+  if (!paragraphs.length) return 0;
+  const index = english ? document.transcriptScrollIndex : document.scrollIndex;
+  return normalizeProgressPercent((Math.max(0, index) / Math.max(1, paragraphs.length - 1)) * 100) ?? 0;
 }
 
 export function parseYouTubeVideoId(value) {
